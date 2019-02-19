@@ -23,23 +23,24 @@
  */
 package se.kth.id2203.kvstore;
 
-import se.kth.id2203.networking._;
-import se.kth.id2203.overlay.Routing;
-import se.sics.kompics.sl._;
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
+import se.kth.id2203.networking._
+import se.kth.id2203.overlay.Routing
+import se.sics.kompics.sl._
 import se.sics.kompics.network.Network;
 
 class KVService extends ComponentDefinition {
 
   //******* Ports ******
-  val net = requires[Network];
   val route = requires(Routing);
+  val pLink = requires[PerfectLinkPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   //******* Handlers ******
-  net uponEvent {
-    case NetMessage(header, op: Op) => handle {
+  pLink uponEvent {
+    case PL_Deliver(src, op :Op) => handle {
       log.info("Got operation {}! Now implement me please :)", op);
-      trigger(NetMessage(self, header.src, op.response(OpCode.NotImplemented)) -> net);
+      trigger(PL_Send(src, op.response(OpCode.NotImplemented)) -> pLink);
     }
   }
 }

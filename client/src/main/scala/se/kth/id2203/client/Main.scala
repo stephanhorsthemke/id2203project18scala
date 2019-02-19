@@ -37,7 +37,7 @@ import org.apache.log4j.{ LogManager, Layout, PatternLayout, WriterAppender };
 class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   import ScallopConverters._;
 
-  version("Project18 Scala Client v1.0");
+  version("Project19 Scala Client v1.1 - Lucian and Stephan");
   banner("Usage: <call jar> [OPTIONS]");
   footer("\n");
 

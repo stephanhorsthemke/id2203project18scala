@@ -53,7 +53,7 @@ final case class NetHeader(src: NetAddress, dst: NetAddress, proto: Transport) e
 }
 
 @SerialVersionUID(0x5c49aa68999b9d1dL)
-final case class NetMessage[C <: KompicsEvent](header: NetHeader, payload: C) extends Msg[NetAddress, NetHeader] with Serializable {
+final case class NetMessage[C <: KompicsEvent](header: NetHeader, payload: C) extends   Msg[NetAddress, NetHeader] with Serializable {
   override def getDestination(): NetAddress = header.dst;
   override def getHeader(): NetHeader = header;
   override def getProtocol(): Transport = header.proto;

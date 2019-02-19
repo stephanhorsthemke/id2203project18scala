@@ -23,16 +23,18 @@
  */
 package se.kth.id2203.kvstore;
 
-import java.util.UUID;
-import se.kth.id2203.networking._;
+import java.util.UUID
 
-import se.kth.id2203.overlay._;
-import se.sics.kompics.sl._;
-import se.sics.kompics.{ Start, Kompics, KompicsEvent };
-import se.sics.kompics.network.Network;
-import se.sics.kompics.timer._;
-import collection.mutable;
-import concurrent.{ Promise, Future };
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLink, PerfectLinkPort}
+import se.kth.id2203.networking._
+import se.kth.id2203.overlay._
+import se.sics.kompics.sl._
+import se.sics.kompics.{Kompics, KompicsEvent, Start}
+import se.sics.kompics.network.Network
+import se.sics.kompics.timer._
+
+import collection.mutable
+import concurrent.{Future, Promise};
 
 case class ConnectTimeout(spt: ScheduleTimeout) extends Timeout(spt);
 case class OpWithPromise(op: Operation, promise: Promise[OpResponse] = Promise()) extends KompicsEvent;
@@ -41,10 +43,10 @@ class ClientService extends ComponentDefinition {
 
   //******* Ports ******
   val timer = requires[Timer];
-  val net = requires[Network];
+  val pLink = requires[PerfectLinkPort];
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
-  val server = cfg.getValue[NetAddress]("id2203.project.bootstrap-address");
+  val server = (cfg.getValue[NetAddress]("id2203.project.bootstrap-address"));
   private var connected: Option[ConnectAck] = None;
   private var timeoutId: Option[UUID] = None;
   private val pending = mutable.SortedMap.empty[UUID, Promise[OpResponse]];
@@ -58,13 +60,17 @@ class ClientService extends ComponentDefinition {
       st.setTimeoutEvent(ConnectTimeout(st));
       trigger (st -> timer);
       timeoutId = Some(st.getTimeoutEvent().getTimeoutId());
-      trigger(NetMessage(self, server, Connect(timeoutId.get)) -> net);
+
+
+      //Kicks off the initial connection to bootstrap server
+      trigger(PL_Send(server, Connect(timeoutId.get)) -> pLink);
       trigger(st -> timer);
     }
   }
 
-  net uponEvent {
-    case NetMessage(header, ack @ ConnectAck(id, clusterSize)) => handle {
+  pLink uponEvent {
+    // starts clientconsole in new thread if connection was successfull
+    case PL_Deliver(_, ack @ ConnectAck(id, clusterSize)) => handle {
       log.info(s"Client connected to $server, cluster size is $clusterSize");
       if (id != timeoutId.get) {
         log.error("Received wrong response id! System may be inconsistent. Shutting down...");
@@ -75,7 +81,9 @@ class ClientService extends ComponentDefinition {
       val tc = new Thread(c);
       tc.start();
     }
-    case NetMessage(header, or @ OpResponse(id, status)) => handle {
+
+
+    case PL_Deliver(_, or @ OpResponse(id, status)) => handle {
       log.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
         case Some(promise) => promise.success(or);
@@ -99,7 +107,7 @@ class ClientService extends ComponentDefinition {
   loopbck uponEvent {
     case OpWithPromise(op, promise) => handle {
       val rm = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
-      trigger(NetMessage(self, server, rm) -> net);
+      trigger(PL_Send(server, rm) -> pLink);
       pending += (op.id -> promise);
     }
   }

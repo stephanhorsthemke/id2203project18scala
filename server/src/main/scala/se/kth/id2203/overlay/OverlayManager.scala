@@ -23,15 +23,17 @@
  */
 package se.kth.id2203.overlay;
 
-import se.kth.id2203.bootstrapping._;
-import se.kth.id2203.networking._;
-import se.sics.kompics.sl._;
-import se.sics.kompics.network.Network;
-import se.sics.kompics.timer.Timer;
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
+import se.kth.id2203.bootstrapping._
+import se.kth.id2203.networking._
+import se.sics.kompics.sl._
+import se.sics.kompics.network.Network
+import se.sics.kompics.timer.Timer
+
 import util.Random;
 
 /**
- * The V(ery)S(imple)OverlayManager.
+ * The V(ery)A(dvanced)OverlayManager.
  * <p>
  * Keeps all nodes in a single partition in one replication group.
  * <p>
@@ -40,13 +42,13 @@ import util.Random;
  * <p>
  * @author Lars Kroll <lkroll@kth.se>
  */
-class VSOverlayManager extends ComponentDefinition {
+class VAOverlayManager extends ComponentDefinition {
 
   //******* Ports ******
   val route = provides(Routing);
   val boot = requires(Bootstrapping);
-  val net = requires[Network];
   val timer = requires[Timer];
+  val pLink = requires[PerfectLinkPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
@@ -55,7 +57,7 @@ class VSOverlayManager extends ComponentDefinition {
     case GetInitialAssignments(nodes) => handle {
       log.info("Generating LookupTable...");
       val lut = LookupTable.generate(nodes);
-      logger.debug("Generated assignments:\n$lut");
+      logger.debug("Generated assignments:\n" + lut);
       trigger (new InitialAssignments(lut) -> boot);
     }
     case Booted(assignment: LookupTable) => handle {
@@ -64,35 +66,43 @@ class VSOverlayManager extends ComponentDefinition {
     }
   }
 
-  net uponEvent {
-    case NetMessage(header, RouteMsg(key, msg)) => handle {
+  pLink uponEvent {
+    // forwards a message to responsible node for the key
+    case PL_Deliver(_, RouteMsg(key, msg)) => handle {
+      // gets responsible node
       val nodes = lut.get.lookup(key);
+      // throws assertionException when nodes is empty
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
+      log.info("Node(s) of lookup for key(" + key + "): " + nodes)
       val target = nodes.drop(i).head;
       log.info(s"Forwarding message for key $key to $target");
-      trigger(NetMessage(header.src, target, msg) -> net);
+      trigger(PL_Send(target, msg) -> pLink);
     }
-    case NetMessage(header, msg: Connect) => handle {
+    // Connectionrequest: send ACK when the system is ready to requester
+    case PL_Deliver(src, msg: Connect) => handle {
       lut match {
+        // do we already have a lookuptable?
         case Some(l) => {
-          log.debug("Accepting connection request from ${header.src}");
+          log.debug("Accepting connection request from " + src);
           val size = l.getNodes().size;
-          trigger (NetMessage(self, header.src, msg.ack(size)) -> net);
+          trigger (PL_Send(src, msg.ack(size)) -> pLink);
         }
-        case None => log.info("Rejecting connection request from ${header.src}, as system is not ready, yet.");
+        case None => log.info(s"Rejecting connection request from ${src}, as system is not ready, yet.");
       }
     }
   }
 
   route uponEvent {
+    // sends message to responsible node for the key
     case RouteMsg(key, msg) => handle {
       val nodes = lut.get.lookup(key);
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
       log.info(s"Routing message for key $key to $target");
-      trigger (NetMessage(self, target, msg) -> net);
+      trigger(PL_Send(target, msg) -> pLink);
+
     }
   }
 }
