@@ -23,7 +23,9 @@
  */
 package se.kth.id2203;
 
-import se.kth.id2203.BEB.Beb
+import se.kth.id2203.BEB.{Beb, BebPort}
+import se.kth.id2203.BEB.Beb.Replication
+import se.kth.id2203.DSM.{AtomicRegister, AtomicRegisterPort}
 import se.kth.id2203.PerfectLink._
 import se.kth.id2203.bootstrapping._
 import se.kth.id2203.kvstore.KVService
@@ -43,16 +45,19 @@ class ParentComponent extends ComponentDefinition {
   //******* Children ******
   val self:NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
 
-  val bebRepl = create(classOf[Beb], Init.NONE)
-  val bebGlobal = create(classOf[Beb], Init.NONE)
+  val beb = create(classOf[Beb], Init.NONE)
 
-  val pLink = create(classOf[PerfectLink], Init.NONE)
+  val pLink = create(classOf[PerfectLink], Init.NONE);
   val overlay = create(classOf[VAOverlayManager], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
+  val ar = create(classOf[AtomicRegister], Init[AtomicRegister](self, 3));
   val boot = cfg.readValue[NetAddress]("id2203.project.bootstrap-address") match {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None    => create(classOf[BootstrapServer], Init.NONE); // start in server mode
   }
+
+
+
 
   {
     connect[Timer](timer -> boot);
@@ -66,12 +71,11 @@ class ParentComponent extends ComponentDefinition {
     //Perfect Link
     connect[Timer](timer -> pLink);
     connect[Network](net -> pLink);
-    //BEB for Replication group
-    connect[PerfectLinkPort](pLink -> bebRepl);
-
-    //BEB for all nodes
-    connect[PerfectLinkPort](pLink -> bebGlobal);
-
+    //BEB
+    connect[PerfectLinkPort](pLink -> beb);
+    //AR
+    connect[PerfectLinkPort](pLink -> ar)
+    connect[BebPort](beb -> ar)
 
   }
 }

@@ -23,6 +23,8 @@
  */
 package se.kth.id2203.overlay;
 
+import se.kth.id2203.BEB.Beb.{Global, Replication}
+import se.kth.id2203.BEB.{BEB_Broadcast, BebPort, BEB_Topology}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.bootstrapping._
 import se.kth.id2203.networking._
@@ -49,6 +51,7 @@ class VAOverlayManager extends ComponentDefinition {
   val boot = requires(Bootstrapping);
   val timer = requires[Timer];
   val pLink = requires[PerfectLinkPort]
+  val bebRepl = requires[BebPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
@@ -62,6 +65,9 @@ class VAOverlayManager extends ComponentDefinition {
     }
     case Booted(assignment: LookupTable) => handle {
       log.info("Got NodeAssignment, overlay ready.");
+      // todo: filter node list for replication group
+      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Replication)) -> pLink)
+      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Global)) -> pLink)
       lut = Some(assignment);
     }
   }

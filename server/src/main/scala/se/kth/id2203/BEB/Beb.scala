@@ -1,5 +1,6 @@
 package se.kth.id2203.BEB;
 
+import se.kth.id2203.BEB.Beb.{BebType, Replication}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking.{NetAddress, NetMessage}
 import se.sics.kompics.sl.{Init, _}
@@ -7,7 +8,11 @@ import se.sics.kompics.{KompicsEvent, ComponentDefinition => _, Port => _}
 
 import scala.collection.immutable.Set;
 
-
+object Beb {
+  sealed trait BebType;
+  case object Replication extends BebType;
+  case object Global extends BebType;
+}
 
 
 class Beb() extends ComponentDefinition {
@@ -15,21 +20,13 @@ class Beb() extends ComponentDefinition {
   //subscriptions
   val pLink = requires[PerfectLinkPort];
   val beb = provides[BebPort];
-
-/*  //configuration
-  val (self, topology) = init match {
-    case Init(s: NetAddress, t: Set[NetAddress]@unchecked) => (s, t)
-  };*/
-
-  var topology: Set[NetAddress] = Set.empty;
-
-  def setTopology(newTopology: Set[NetAddress]){
-    topology = newTopology
-  }
+  var topologyRepl: Set[NetAddress] = Set.empty;
+  var topologyGlobal: Set[NetAddress] = Set.empty;
 
   //handlers
   beb uponEvent {
     case x: BEB_Broadcast => handle {
+      val topology = if (x.typ == Replication) topologyRepl else topologyGlobal;
 
       for (p <- topology) {
         trigger(PL_Send(p, x), pLink);
@@ -38,10 +35,18 @@ class Beb() extends ComponentDefinition {
   }
 
   pLink uponEvent {
-    case PL_Deliver(src, BEB_Broadcast(payload)) => handle {
+    case PL_Deliver(src, BEB_Broadcast(payload, typ)) => handle {
 
-      trigger(BEB_Deliver(src, payload) -> beb);
+      trigger(BEB_Deliver(src, payload, typ) -> beb);
 
+    }
+    case PL_Deliver(_, BEB_Topology(addr: Set[NetAddress], sc)) => handle {
+
+      if (sc == Replication) {
+        topologyRepl = addr;
+      } else {
+        topologyGlobal = addr;
+      }
     }
   }
 }
