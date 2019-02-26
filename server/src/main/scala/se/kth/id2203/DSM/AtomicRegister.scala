@@ -27,7 +27,7 @@ class AtomicRegister() extends ComponentDefinition {
   val rank = self.getPort();
 
   var (ts, wr) = (0, 0);
-  var value = scala.collection.mutable.Map.empty[String, String];
+  var value: Option[Any] = Some(4);
   var acks = 0;
   var readval: Option[Any] = None;
   var writeval: Option[Any] = None;
@@ -39,7 +39,7 @@ class AtomicRegister() extends ComponentDefinition {
   //handlers
 
   nnar uponEvent {
-    case AR_Read_Request(uuid, key) => handle {
+    case AR_Read_Request(uuid) => handle {
       rid = rid + 1;
       acks = 0;
       readlist = Map.empty;
@@ -52,7 +52,7 @@ class AtomicRegister() extends ComponentDefinition {
       trigger(BEB_Broadcast(READ(rid), Replication) -> beb);
 
     }
-    case AR_Write_Request(wval, key, uuid) => handle {
+    case AR_Write_Request(wval, uuid) => handle {
       rid = rid + 1;
       writeval = Some(wval);
       acks = 0;
