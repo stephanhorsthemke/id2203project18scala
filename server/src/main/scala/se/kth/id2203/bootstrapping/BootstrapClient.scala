@@ -53,29 +53,14 @@ class BootstrapClient extends ComponentDefinition {
 
   private var timeoutId: Option[UUID] = None;
 
+  // The uuid or hashed used for the list of nodes!
+  val uuid = UUID.randomUUID()
+
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
       log.debug("Starting bootstrap client on {}", self);
-      val timeout: Long = cfg.getValue[Long]("id2203.project.keepAlivePeriod");
-      val spt = new SchedulePeriodicTimeout(timeout, timeout);
-      spt.setTimeoutEvent(BSTimeout(spt));
-      trigger (spt -> timer);
-      timeoutId = Some(spt.getTimeoutEvent().getTimeoutId());
-    }
-  }
-
-  timer uponEvent {
-    case BSTimeout(_) => handle {
-      state match {
-        case Waiting => {
-          trigger(PL_Send(server, CheckIn) -> pLink);
-        }
-        case Started => {
-          trigger(PL_Send(server, Ready) -> pLink);
-          suicide();
-        }
-      }
+      trigger(PL_Send(server, CheckIn) -> pLink);
     }
   }
 
@@ -90,17 +75,11 @@ class BootstrapClient extends ComponentDefinition {
             case None      => // nothing to cancel
           }
           trigger(PL_Send(server, Ready) -> pLink);
-          state = Started;
+          state = Started
+          suicide()
         }
         case _ => // ignore
       }
-    }
-  }
-
-  override def tearDown(): Unit = {
-    timeoutId match {
-      case Some(tid) => trigger(new CancelPeriodicTimeout(tid) -> timer);
-      case None      => // nothing to cancel
     }
   }
 }

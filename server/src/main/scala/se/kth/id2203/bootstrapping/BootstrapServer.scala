@@ -61,46 +61,10 @@ class BootstrapServer extends ComponentDefinition {
   ctrl uponEvent {
     case _: Start => handle {
       log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
-      val timeout: Long = cfg.getValue[Long]("id2203.project.keepAlivePeriod") * 2l;
-      val spt = new SchedulePeriodicTimeout(timeout, timeout);
-      spt.setTimeoutEvent(BSTimeout(spt));
-      trigger (spt -> timer);
-      timeoutId = Some(spt.getTimeoutEvent().getTimeoutId());
       active += self;
     }
   }
 
-  timer uponEvent {
-    case BSTimeout(_) => handle {
-      state match {
-        case Collecting => {
-          log.info("{} hosts in active set.", active.size);
-          if (active.size >= bootThreshold) {
-            bootUp();
-          }
-        }
-        case Seeding => {
-          log.info("{} hosts in ready set.", ready.size);
-          if (ready.size >= bootThreshold) {
-            log.info("Finished seeding. Bootstrapping complete.");
-            initialAssignment match {
-              case Some(assignment) => {
-                trigger(Booted(assignment) -> boot);
-                state = Done;
-              }
-              case None => {
-                logger.error(s"No initial assignment received at bootThreshold. Ready nodes: $ready");
-                suicide();
-              }
-            }
-          }
-        }
-        case Done => {
-          suicide();
-        }
-      }
-    }
-  }
 
   boot uponEvent {
     case InitialAssignments(assignment) => handle {
@@ -116,16 +80,27 @@ class BootstrapServer extends ComponentDefinition {
   pLink uponEvent {
     case PL_Deliver(src, CheckIn) => handle {
       active += src;
+      log.info("{} hosts in active set.", active.size);
+      if (active.size >= bootThreshold) {
+        bootUp();
+      }
     }
     case PL_Deliver(src, Ready) => handle {
       ready += src;
-    }
-  }
-
-  override def tearDown(): Unit = {
-    timeoutId match {
-      case Some(tid) => trigger(new CancelPeriodicTimeout(tid) -> timer);
-      case None      => // nothing to clean up
+      log.info("{} hosts in ready set.", ready.size);
+      if (ready.size >= bootThreshold) {
+        log.info("Finished seeding. Bootstrapping complete.");
+        initialAssignment match {
+          case Some(assignment) => {
+            trigger(Booted(assignment) -> boot);
+            suicide()
+          }
+          case None => {
+            logger.error(s"No initial assignment received at bootThreshold. Ready nodes: $ready");
+            suicide();
+          }
+        }
+      }
     }
   }
 
