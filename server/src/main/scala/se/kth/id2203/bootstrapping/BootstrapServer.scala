@@ -43,17 +43,12 @@ InitialAssignments
 }
 
 class BootstrapServer extends ComponentDefinition {
-  import BootstrapServer._;
-
   //******* Ports ******
   val boot = provides(Bootstrapping);
   val pLink = requires[PerfectLinkPort];
-  val timer = requires[Timer];
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val bootThreshold = cfg.getValue[Int]("id2203.project.bootThreshold");
-  private var state: State = Collecting;
-  private var timeoutId: Option[UUID] = None;
   private val active = mutable.HashSet.empty[NetAddress];
   private val ready = mutable.HashSet.empty[NetAddress];
   private var initialAssignment: Option[NodeAssignment] = None;
@@ -106,7 +101,6 @@ class BootstrapServer extends ComponentDefinition {
 
   private def bootUp(): Unit = {
     log.info("Threshold reached. Generating assignments...");
-    state = Seeding;
     trigger(GetInitialAssignments(active.toSet) -> boot);
   }
 }
