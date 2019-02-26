@@ -31,6 +31,7 @@ import se.kth.id2203.bootstrapping._
 import se.kth.id2203.kvstore.KVService
 import se.kth.id2203.networking.{NetAddress, NetAddressConverter, ScallopConverters}
 import se.kth.id2203.overlay._
+import se.kth.id2203.replicationController.ReplicationController
 import se.sics.kompics.sl._
 import se.sics.kompics.Init
 import se.sics.kompics.network.Network
@@ -51,6 +52,7 @@ class ParentComponent extends ComponentDefinition {
   val overlay = create(classOf[VAOverlayManager], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
   val ar = create(classOf[AtomicRegister], Init.NONE);
+  val rc = create(classOf[ReplicationController], Init.NONE);
   val boot = cfg.readValue[NetAddress]("id2203.project.bootstrap-address") match {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None    => create(classOf[BootstrapServer], Init.NONE); // start in server mode
@@ -60,11 +62,10 @@ class ParentComponent extends ComponentDefinition {
 
 
   {
-
-    logger
-
-    connect[Timer](timer -> boot);
     connect[PerfectLinkPort](pLink -> boot);
+    //ReplicationController
+    connect[PerfectLinkPort](pLink -> rc);
+    connect(Bootstrapping)(boot -> rc);
     // Overlay
     connect(Bootstrapping)(boot -> overlay);
     connect[PerfectLinkPort](pLink -> overlay);

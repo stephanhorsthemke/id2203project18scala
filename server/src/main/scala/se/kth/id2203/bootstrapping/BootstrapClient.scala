@@ -43,7 +43,6 @@ class BootstrapClient extends ComponentDefinition {
 
   //******* Ports ******
   val bootstrap = provides(Bootstrapping);
-  val timer = requires[Timer];
   val pLink = requires[PerfectLinkPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
@@ -51,7 +50,6 @@ class BootstrapClient extends ComponentDefinition {
 
   private var state: State = Waiting;
 
-  private var timeoutId: Option[UUID] = None;
 
   // The uuid or hashed used for the list of nodes!
   val uuid = UUID.randomUUID()
@@ -70,10 +68,6 @@ class BootstrapClient extends ComponentDefinition {
         case Waiting => {
           log.info("{} Booting up.", self);
           trigger(Booted(assignment) -> bootstrap);
-          timeoutId match {
-            case Some(tid) => trigger(new CancelPeriodicTimeout(tid) -> timer);
-            case None      => // nothing to cancel
-          }
           trigger(PL_Send(server, Ready) -> pLink);
           state = Started
           suicide()
