@@ -1,5 +1,7 @@
 package se.kth.id2203.DSM
 
+import java.util.UUID
+
 import se.kth.id2203.BEB.Beb.Replication
 import se.kth.id2203.BEB._
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
@@ -8,13 +10,10 @@ import se.kth.id2203.networking.{NetAddress, NetMessage}
 import se.sics.kompics.sl.{Init, _}
 import se.sics.kompics.{KompicsEvent, Start, ComponentDefinition => _, Port => _}
 
-class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
-  /**
-    * This augments tuples with comparison operators implicitly, which you can use in your code.
-    * examples: (1,2) > (1,4) yields 'false' and  (5,4) <= (7,4) yields 'true'
-    */
-  implicit def addComparators[A](x: A)(implicit o: math.Ordering[A]): o.Ops = o.mkOrderingOps(x);
+class AtomicRegister() extends ComponentDefinition {
 
+
+  implicit def addComparators[A](x: A)(implicit o: math.Ordering[A]): o.Ops = o.mkOrderingOps(x);
 
   //subscriptions
 
@@ -22,14 +21,13 @@ class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
   val pLink = requires[PerfectLinkPort];
   val beb = requires[BebPort];
 
-  //state and initialization
-
-  val (self: NetAddress, n: Int, selfRank: Int) = init match {
-    case Init(selfAddr: NetAddress, n: Int) => (selfAddr, n, 4)
-  };
+  // todo: set according to number of nodes in partition
+  val n = 3
+  val self:NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
+  val rank = self.getPort();
 
   var (ts, wr) = (0, 0);
-  var value: Option[Any] = None;
+  var value = scala.collection.mutable.Map.empty[String, String];
   var acks = 0;
   var readval: Option[Any] = None;
   var writeval: Option[Any] = None;
@@ -37,27 +35,30 @@ class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
   var readlist: Map[NetAddress, (Int, Int, Option[Any])] = Map.empty
   var reading = false;
 
+  var idMap: Map[Int, UUID] = Map.empty;
   //handlers
 
   nnar uponEvent {
-    case AR_Read_Request() => handle {
+    case AR_Read_Request(uuid, key) => handle {
       rid = rid + 1;
       acks = 0;
       readlist = Map.empty;
       reading = true;
+      idMap += (rid -> uuid);
 
-      println(selfRank + " :: " + System.currentTimeMillis() + ":: ReadRequest:  " + rid);
+      log.info(rank + " :: " + System.currentTimeMillis() + ":: ReadRequest:  " + rid);
 
       //Broadcast read request to all
       trigger(BEB_Broadcast(READ(rid), Replication) -> beb);
 
     }
-    case AR_Write_Request(wval) => handle {
+    case AR_Write_Request(wval, key, uuid) => handle {
       rid = rid + 1;
       writeval = Some(wval);
       acks = 0;
       readlist = Map.empty;
-      println(selfRank + " :: " + System.currentTimeMillis() + ":: WriteRequest:  " + rid);
+      idMap += (rid -> uuid);
+      //println(selfRank + " :: " + System.currentTimeMillis() + ":: WriteRequest:  " + rid);
       trigger(BEB_Broadcast(READ(rid), Replication) -> beb);
     }
   }
@@ -73,12 +74,12 @@ class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
 
 
     case BEB_Deliver(src, w: WRITE, Replication) => handle {
-      println(selfRank + " :: " + System.currentTimeMillis() + ":: WriteRequestDelivered:  " + w.rid);
+      //println(selfRank + " :: " + System.currentTimeMillis() + ":: WriteRequestDelivered:  " + w.rid);
       if((w.ts,w.wr) > (ts, wr)){
         ts = w.ts;
         wr = w.wr;
         value = w.writeVal;
-        println(selfRank + " :: " + System.currentTimeMillis() + ":: New TS:  " + ts + ":: new VAlue " + value);
+        //println(selfRank + " :: " + System.currentTimeMillis() + ":: New TS:  " + ts + ":: new VAlue " + value);
       }
       trigger(PL_Send(src, ACK(w.rid)) -> pLink);
     }
@@ -95,9 +96,9 @@ class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
 
         if(readlist.size > n/2 ){
 
-          println(selfRank + " :: " + System.currentTimeMillis() + ":: Majority READs:  " + readlist);
+          //println(selfRank + " :: " + System.currentTimeMillis() + ":: Majority READs:  " + readlist);
           var highest = readlist.valuesIterator.reduceLeft{(a,x) => if(a._2>x._2) a else x};
-          println(selfRank + " :: " + System.currentTimeMillis() + ":: Highest READ:  " + highest);
+          //println(selfRank + " :: " + System.currentTimeMillis() + ":: Highest READ:  " + highest);
           var maxts = highest._1;
           var rr = highest._2;
           readval = highest._3;
@@ -108,7 +109,7 @@ class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
             bcastval = readval;
           }
           else{
-            rr = selfRank;
+            rr = rank;
             maxts = maxts + 1;
             bcastval = writeval;
           }
@@ -120,26 +121,23 @@ class AtomicRegister(init: Init[AtomicRegister]) extends ComponentDefinition {
 
     // an ACK from src arrives
     case PL_Deliver(src, v: ACK) => handle {
-      //if register id is the curreent one (it is not an old ACK)
+      //if register id is the current one (it is not an old ACK)
       if (v.rid == rid) {
+        var uuid = idMap(rid);
+
         // increment ack
         acks = acks + 1;
         if (acks > n/2){
-          println(selfRank + " :: " + System.currentTimeMillis() + ":: Majority ACKs, reading =  " + reading);
+          //println(selfRank + " :: " + System.currentTimeMillis() + ":: Majority ACKs, reading =  " + reading);
           acks = 0;
           if (reading == true){
             reading = false;
-            trigger(AR_Read_Response(readval) -> nnar);
+            trigger(AR_Read_Response(readval, uuid) -> nnar);
           }else{
-            trigger(AR_Write_Response() -> nnar)
+            trigger(AR_Write_Response(uuid) -> nnar)
           }
         }
       }
-    }
-
-    case PL_Deliver(src, op :Op) => handle {
-      log.info("Got operation in DSM {}! Now implement me please :)", op);
-      trigger(PL_Send(src, op.response(OpCode.NotImplemented)) -> pLink);
     }
   }
 }

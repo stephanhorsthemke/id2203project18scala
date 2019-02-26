@@ -23,14 +23,17 @@
  */
 package se.kth.id2203.overlay;
 
+import java.util.UUID
+
 import se.kth.id2203.BEB.Beb.{Global, Replication}
-import se.kth.id2203.BEB.{BEB_Broadcast, BebPort, BEB_Topology}
+import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.bootstrapping._
 import se.kth.id2203.networking._
 import se.sics.kompics.sl._
 import se.sics.kompics.network.Network
 import se.sics.kompics.timer.Timer
+import se.kth.id2203.kvstore.{Op, OpCode, OpResponse}
 
 import util.Random;
 
@@ -55,6 +58,9 @@ class VAOverlayManager extends ComponentDefinition {
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
+  var srcMap = scala.collection.mutable.Map.empty[UUID, NetAddress]
+
+
   //******* Handlers ******
   boot uponEvent {
     case GetInitialAssignments(nodes) => handle {
@@ -74,16 +80,31 @@ class VAOverlayManager extends ComponentDefinition {
 
   pLink uponEvent {
     // forwards a message to responsible node for the key
-    case PL_Deliver(_, RouteMsg(key, msg)) => handle {
+    case PL_Deliver(src, RouteMsg(key,op:Op)) => handle {
+
+      srcMap += (op.id -> src);
       // gets responsible node
       val nodes = lut.get.lookup(key);
       // throws assertionException when nodes is empty
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
-      log.info("Node(s) of lookup for key(" + key + "): " + nodes)
       val target = nodes.drop(i).head;
-      log.info(s"Forwarding message for key $key to $target");
-      trigger(PL_Send(target, msg) -> pLink);
+      log.info(s"Forwarding message for key $key to $target with $op");
+      trigger(PL_Send(target, op) -> pLink);
+    }
+
+    // sending the handles OP back to where it came from
+    case PL_Deliver(_ , opResp @ OpResponse(uuid,OpCode.Ok,_)) => handle{
+      var src: Option[NetAddress] = None
+      if(srcMap.contains(uuid)){
+        src = srcMap.remove(uuid)
+        trigger(PL_Send(src.get, opResp) -> pLink)
+        log.info("Sent OpResponse")
+      }else{
+        log.debug("No src for uuid known: either duplicate message or lost: " + opResp)
+      }
+
+
     }
     // Connectionrequest: send ACK when the system is ready to requester
     case PL_Deliver(src, msg: Connect) => handle {
@@ -100,13 +121,14 @@ class VAOverlayManager extends ComponentDefinition {
   }
 
   route uponEvent {
+    // TODO DO we even need this
     // sends message to responsible node for the key
     case RouteMsg(key, msg) => handle {
       val nodes = lut.get.lookup(key);
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
-      log.info(s"Routing message for key $key to $target");
+      log.info(s"ROUTING MESSAGE for key $key to $target");
       trigger(PL_Send(target, msg) -> pLink);
 
     }

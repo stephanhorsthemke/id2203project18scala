@@ -19,7 +19,7 @@ class PerfectLink() extends ComponentDefinition {
   val self = cfg.getValue[NetAddress]("id2203.project.address");
 
   // sender
-  var timeDelay = 100
+  var timeDelay = 300
   var sent: Map[Int, NetMessage[UniqueMessage]] = Map.empty
   var messageCount = 0
 
@@ -35,8 +35,8 @@ class PerfectLink() extends ComponentDefinition {
 
   // whenever the timeout is triggered, resend all non acked messages
   timer uponEvent {
-
     case Resend(delay) => handle {
+      if(!sent.isEmpty)
       log.debug("timeout, resending: " + sent)
       sent.keys.foreach {
         i =>
@@ -55,7 +55,7 @@ class PerfectLink() extends ComponentDefinition {
       messageCount += 1
       val message = NetMessage(self, dest, UniqueMessage(messageCount, payload))
       sent = sent + (messageCount -> message)
-      log.info("send message number: " + messageCount + " to: " + dest + " with message: " + payload)
+      //log.info("send message number: " + messageCount + " to: " + dest + " with message: " + payload)
       trigger(message -> net)
       startTimer(timeDelay)
     }

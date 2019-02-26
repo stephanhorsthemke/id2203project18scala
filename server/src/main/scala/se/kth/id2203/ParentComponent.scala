@@ -50,7 +50,7 @@ class ParentComponent extends ComponentDefinition {
   val pLink = create(classOf[PerfectLink], Init.NONE);
   val overlay = create(classOf[VAOverlayManager], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
-  val ar = create(classOf[AtomicRegister], Init[AtomicRegister](self, 3));
+  val ar = create(classOf[AtomicRegister], Init.NONE);
   val boot = cfg.readValue[NetAddress]("id2203.project.bootstrap-address") match {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None    => create(classOf[BootstrapServer], Init.NONE); // start in server mode
@@ -60,6 +60,9 @@ class ParentComponent extends ComponentDefinition {
 
 
   {
+
+    logger
+
     connect[Timer](timer -> boot);
     connect[PerfectLinkPort](pLink -> boot);
     // Overlay
@@ -68,6 +71,7 @@ class ParentComponent extends ComponentDefinition {
     // KV
     connect(Routing)(overlay -> kv);
     connect[PerfectLinkPort](pLink -> kv);
+    connect[AtomicRegisterPort](ar -> kv);
     //Perfect Link
     connect[Timer](timer -> pLink);
     connect[Network](net -> pLink);

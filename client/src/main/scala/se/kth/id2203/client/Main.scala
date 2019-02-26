@@ -76,6 +76,8 @@ object Main {
     assert(bootstrapAddress != null, "No bootstrap server provided!");
 
     // Finally start stuff
+
+
     Kompics.createAndStart(classOf[ParentComponent]);
     Kompics.logger.info("Kompics started.");
     Kompics.waitForTermination();

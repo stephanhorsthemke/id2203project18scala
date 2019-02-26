@@ -17,6 +17,9 @@ object Beb {
 
 class Beb() extends ComponentDefinition {
 
+
+  val self:NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
+
   //subscriptions
   val pLink = requires[PerfectLinkPort];
   val beb = provides[BebPort];
@@ -28,20 +31,24 @@ class Beb() extends ComponentDefinition {
     case x: BEB_Broadcast => handle {
       val topology = if (x.typ == Replication) topologyRepl else topologyGlobal;
 
-      for (p <- topology) {
-        trigger(PL_Send(p, x), pLink);
+      if (topology.isEmpty) {
+        log.debug("Topology is empty and first has to be set!")
+      }
+      else {
+        for (p <- topology) {
+          trigger(PL_Send(p, x), pLink);
+        }
       }
     }
   }
 
   pLink uponEvent {
     case PL_Deliver(src, BEB_Broadcast(payload, typ)) => handle {
-
-      trigger(BEB_Deliver(src, payload, typ) -> beb);
+      trigger(BEB_Deliver(src, payload, typ) -> beb)
 
     }
-    case PL_Deliver(_, BEB_Topology(addr: Set[NetAddress], sc)) => handle {
 
+    case PL_Deliver(this.self, BEB_Topology(addr: Set[NetAddress], sc)) => handle {
       if (sc == Replication) {
         topologyRepl = addr;
       } else {

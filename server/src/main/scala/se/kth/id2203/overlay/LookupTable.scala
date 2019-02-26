@@ -34,8 +34,7 @@ class LookupTable extends NodeAssignment with Serializable {
 
   val partitions = TreeSetMultiMap.empty[Int, NetAddress];
 
-  // Returns the network address of the node which has the next greater hash
-  // and therefore is responsible for the key
+  // Returns the network address of nodes in one partition which are responsible for key
   def lookup(key: String): Iterable[NetAddress] = {
     val keyHash = key.hashCode();
     val partition = partitions.floor(keyHash) match {
@@ -45,10 +44,11 @@ class LookupTable extends NodeAssignment with Serializable {
     return partitions(partition);
   }
 
-  //Black Magic to get the nodes back from the weird TreeSetMultiMap
+  // Gets the nodes of a specific partitions probably in an ordered way
   def getNodes(): Set[NetAddress] = partitions.foldLeft(Set.empty[NetAddress]) {
     case (acc, kv) => acc ++ kv._2
   }
+
 
   override def toString(): String = {
     val sb = new StringBuilder();

@@ -83,7 +83,7 @@ class ClientService extends ComponentDefinition {
     }
 
 
-    case PL_Deliver(_, or @ OpResponse(id, status)) => handle {
+    case PL_Deliver(_, or @ OpResponse(id, status, value)) => handle {
       log.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
         case Some(promise) => promise.success(or);
@@ -105,16 +105,22 @@ class ClientService extends ComponentDefinition {
   }
 
   loopbck uponEvent {
-    case OpWithPromise(op, promise) => handle {
-      val rm = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
+    case OpWithPromise(opObj, promise) => handle {
+      val rm = RouteMsg(opObj.key, opObj); // don't know which partition is responsible, so ask the bootstrap server to forward it
       trigger(PL_Send(server, rm) -> pLink);
-      pending += (op.id -> promise);
+      pending += (opObj.id -> promise);
     }
   }
 
-  def op(key: String): Future[OpResponse] = {
-    val op = Op(key);
-    val owf = OpWithPromise(op);
+  def op(opName: String, key: String): Future[OpResponse] = {
+    val opObj = Op(opName, key);
+    val owf = OpWithPromise(opObj);
+    trigger(owf -> onSelf);
+    owf.promise.future
+  }
+  def op(opName: String, key: String, value: String): Future[OpResponse] = {
+    val opObj = Op(opName, key, value);
+    val owf = OpWithPromise(opObj);
     trigger(owf -> onSelf);
     owf.promise.future
   }
