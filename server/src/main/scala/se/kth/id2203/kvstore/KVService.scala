@@ -48,13 +48,13 @@ class KVService extends ComponentDefinition {
     case PL_Deliver(src, op :Op) if op.opName == "GET" => handle {
       log.info("Got operation GET! from: " + src);
       srcMap += (op.id -> (src, op));
-      trigger(AR_Read_Request(op.id, op.key) -> nnar);
+      trigger(AR_Read_Request(op.id) -> nnar);
     }
 
     case PL_Deliver(src, op :Op) if op.opName == "PUT" => handle {
       log.info("Got operation PUT!");
       srcMap += (op.id -> (src, op));
-      trigger(AR_Write_Request(op.value, op.key, op.id) -> nnar);
+      trigger(AR_Write_Request(op.value, op.id) -> nnar);
     }
 
     case PL_Deliver(src, op :Op) if op.opName == "CAS" => handle {
