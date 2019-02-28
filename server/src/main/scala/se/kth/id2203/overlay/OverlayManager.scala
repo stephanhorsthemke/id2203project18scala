@@ -63,7 +63,7 @@ class VAOverlayManager extends ComponentDefinition {
 
   //******* Handlers ******
   boot uponEvent {
-    case GetInitialAssignments(nodes) => handle {
+    case UpdateNodes(nodes) => handle {
       log.info("Generating LookupTable...");
       val lut = LookupTable.generate(nodes);
       logger.debug("Generated assignments:\n" + lut);

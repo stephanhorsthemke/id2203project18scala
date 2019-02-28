@@ -101,6 +101,6 @@ class BootstrapServer extends ComponentDefinition {
 
   private def bootUp(): Unit = {
     log.info("Threshold reached. Generating assignments...");
-    trigger(GetInitialAssignments(active.toSet) -> boot);
+    trigger(UpdateNodes(active.toSet) -> boot);
   }
 }

@@ -39,7 +39,6 @@ object BootstrapClient {
 }
 
 class BootstrapClient extends ComponentDefinition {
-  import BootstrapClient._;
 
   //******* Ports ******
   val bootstrap = provides(Bootstrapping);
@@ -47,8 +46,6 @@ class BootstrapClient extends ComponentDefinition {
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val server = cfg.getValue[NetAddress]("id2203.project.bootstrap-address");
-
-  private var state: State = Waiting;
 
 
   // The uuid or hashed used for the list of nodes!
@@ -64,16 +61,10 @@ class BootstrapClient extends ComponentDefinition {
 
   pLink uponEvent {
     case PL_Deliver(src, Boot(assignment)) => handle {
-      state match {
-        case Waiting => {
-          log.info("{} Booting up.", self);
-          trigger(Booted(assignment) -> bootstrap);
-          trigger(PL_Send(server, Ready) -> pLink);
-          state = Started
-          suicide()
-        }
-        case _ => // ignore
-      }
+      log.info("{} Booting up.", self);
+      trigger(Booted(assignment) -> bootstrap);
+      trigger(PL_Send(server, Ready) -> pLink);
+      suicide()
     }
   }
 }

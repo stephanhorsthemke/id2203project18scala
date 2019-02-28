@@ -23,20 +23,24 @@
  */
 package se.kth.id2203.simulation;
 
-import java.util.UUID;
-import se.kth.id2203.kvstore._;
-import se.kth.id2203.networking._;
-import se.kth.id2203.overlay.RouteMsg;
+import java.util.UUID
+
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
+import se.kth.id2203.kvstore._
+import se.kth.id2203.networking._
+import se.kth.id2203.overlay.RouteMsg
 import se.sics.kompics.sl._
-import se.sics.kompics.Start;
-import se.sics.kompics.network.Network;
-import se.sics.kompics.timer.Timer;
-import se.sics.kompics.sl.simulator.SimulationResult;
+import se.sics.kompics.Start
+import se.sics.kompics.network.Network
+import se.sics.kompics.timer.Timer
+import se.sics.kompics.sl.simulator.SimulationResult
+
 import collection.mutable;
 
 class ScenarioClient extends ComponentDefinition {
 
   //******* Ports ******
+  val pLink = requires[PerfectLinkPort];
   val net = requires[Network];
   val timer = requires[Timer];
   //******* Fields ******
@@ -48,9 +52,9 @@ class ScenarioClient extends ComponentDefinition {
     case _: Start => handle {
       val messages = SimulationResult[Int]("messages");
       for (i <- 0 to messages) {
-        val op = new Op(s"test$i");
+        val op = new Op(s"GET");
         val routeMsg = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
-        trigger(NetMessage(self, server, routeMsg) -> net);
+        trigger(PL_Send(server, routeMsg) -> pLink);
         pending += (op.id -> op.key);
         logger.info("Sending {}", op);
         SimulationResult += (op.key -> "Sent");
@@ -58,8 +62,8 @@ class ScenarioClient extends ComponentDefinition {
     }
   }
 
-  net uponEvent {
-    case NetMessage(header, or @ OpResponse(id, status, value)) => handle {
+  pLink uponEvent {
+    case PL_Deliver(src, or @ OpResponse(id, status, value)) => handle {
       logger.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
         case Some(key) => SimulationResult += (key -> status.toString());
