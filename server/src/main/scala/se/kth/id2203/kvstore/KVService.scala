@@ -45,19 +45,19 @@ class KVService extends ComponentDefinition {
 
   //******* Hop.idandlers ******
   pLink uponEvent {
-    case PL_Deliver(src, op :Op) if op.key == "GET" => handle {
+    case PL_Deliver(src, op :Op) if op.opName == "GET" => handle {
       log.info("Got operation GET! from: " + src);
       srcMap += (op.id -> (src, op));
       trigger(AR_Read_Request(op.id, op.key) -> nnar);
     }
 
-    case PL_Deliver(src, op :Op) if op.key == "PUT" => handle {
+    case PL_Deliver(src, op :Op) if op.opName == "PUT" => handle {
       log.info("Got operation PUT!");
       srcMap += (op.id -> (src, op));
       trigger(AR_Write_Request(op.value, op.key, op.id) -> nnar);
     }
 
-    case PL_Deliver(src, op :Op) if op.key == "CAS" => handle {
+    case PL_Deliver(src, op :Op) if op.opName == "CAS" => handle {
       log.info("Got operation CAS!");
       trigger(PL_Send(src, op.response(OpCode.NotImplemented)) -> pLink);
     }

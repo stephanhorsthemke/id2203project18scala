@@ -29,6 +29,7 @@ import se.kth.id2203.BEB.Beb.{Global, Replication}
 import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.bootstrapping._
+import se.kth.id2203.kvstore.OpCode.OpCode
 import se.kth.id2203.networking._
 import se.sics.kompics.sl._
 import se.sics.kompics.network.Network
@@ -94,7 +95,7 @@ class VAOverlayManager extends ComponentDefinition {
     }
 
     // sending the handles OP back to where it came from
-    case PL_Deliver(_ , opResp @ OpResponse(uuid,OpCode.Ok,_)) => handle{
+    case PL_Deliver(_ , opResp @ OpResponse(uuid,opCode: OpCode,_)) => handle{
       var src: Option[NetAddress] = None
       if(srcMap.contains(uuid)){
         src = srcMap.remove(uuid)

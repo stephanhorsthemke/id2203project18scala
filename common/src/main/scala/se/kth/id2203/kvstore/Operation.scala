@@ -28,6 +28,7 @@ import se.sics.kompics.KompicsEvent;
 
 trait Operation extends KompicsEvent {
   def id: UUID;
+  def opName: String;
   def key: String;
   def value: Any;
 }

@@ -44,7 +44,7 @@ class ClientConsole(val service: ClientService) extends CommandConsole with Pars
   override def layout: Layout = colouredLayout;
   override def onInterrupt(): Unit = exit();
 
-  val opCommand = parsed(P("op" ~ " " ~ simpleStr ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "op <op> <register> <value>", descr = "Executes an <op> at <key>. In case of PUT it takes <value>") { parsed =>
+  val opCommand = parsed(P("op" ~ " " ~ simpleStr ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "op <op> <key> <value>", descr = "Executes an <op> at <key>. In case of PUT it takes <value>") { parsed =>
     println(s"Op with $parsed");
 
     var (op, key, value) = parsed
