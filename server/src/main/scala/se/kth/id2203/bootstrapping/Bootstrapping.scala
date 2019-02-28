@@ -5,11 +5,11 @@ import se.sics.kompics.sl._;
 import se.kth.id2203.networking.NetAddress;
 
 object Bootstrapping extends Port {
-  indication[GetInitialAssignments];
+  indication[UpdateNodes];
   indication[Booted];
   request[InitialAssignments];
 }
 
-case class GetInitialAssignments(nodes: Set[NetAddress]) extends KompicsEvent;
+case class UpdateNodes(nodes: Set[NetAddress]) extends KompicsEvent;
 case class Booted(assignment: NodeAssignment) extends KompicsEvent;
 case class InitialAssignments(assignment: NodeAssignment) extends KompicsEvent;

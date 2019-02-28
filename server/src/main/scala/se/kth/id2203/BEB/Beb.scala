@@ -3,7 +3,7 @@ package se.kth.id2203.BEB;
 import se.kth.id2203.BEB.Beb.{BebType, Replication}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking.{NetAddress, NetMessage}
-import se.sics.kompics.sl.{Init, _}
+import se.sics.kompics.sl._
 import se.sics.kompics.{KompicsEvent, ComponentDefinition => _, Port => _}
 
 import scala.collection.immutable.Set;
