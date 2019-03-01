@@ -34,7 +34,7 @@ trait Operation extends KompicsEvent {
 }
 
 @SerialVersionUID(0xfacc6612da2139eaL)
-case class Op(key: String,  value: Any = None, id: UUID = UUID.randomUUID()) extends Operation with Serializable {
+case class Op(opName: String,  key: String, value: Any = None, id: UUID = UUID.randomUUID()) extends Operation with Serializable {
   def response(status: OpCode.OpCode): OpResponse = OpResponse(id, status, None);
   def response(status: OpCode.OpCode, value: Any): OpResponse = OpResponse(id, status, value);
 }
