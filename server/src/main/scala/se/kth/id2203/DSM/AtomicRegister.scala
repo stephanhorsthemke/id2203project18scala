@@ -35,6 +35,7 @@ class AtomicRegister() extends ComponentDefinition {
         store(key) = new StoreObject;
       }
 
+
       store(key).rid += 1;
       store(key).acks = 0;
       store(key).readlist = Map.empty;
