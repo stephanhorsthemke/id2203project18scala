@@ -55,14 +55,14 @@ class BootstrapClient extends ComponentDefinition {
   ctrl uponEvent {
     case _: Start => handle {
       log.debug("Starting bootstrap client on {}", self);
-      trigger(PL_Send(server, CheckIn) -> pLink);
+      trigger(PL_Send(server, CheckIn(uuid.toString)) -> pLink);
     }
   }
 
   pLink uponEvent {
-    case PL_Deliver(src, Boot(assignment)) => handle {
+    case PL_Deliver(src, Boot(assignment, nodes)) => handle {
       log.info("{} Booting up.", self);
-      trigger(Booted(assignment) -> bootstrap);
+      trigger(Booted(assignment, nodes) -> bootstrap);
       trigger(PL_Send(server, Ready) -> pLink);
       suicide()
     }

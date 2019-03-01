@@ -66,20 +66,23 @@ class VAOverlayManager extends ComponentDefinition {
   boot uponEvent {
     case UpdateNodes(nodes) => handle {
       log.info("Generating LookupTable...");
-      val lut = LookupTable.generate(nodes);
+      val lut = LookupTable.generate(nodes.keySet);
       logger.debug("Generated assignments:\n" + lut);
       trigger (new InitialAssignments(lut) -> boot);
     }
-    case Booted(assignment: LookupTable) => handle {
+    case Booted(assignment: LookupTable, _) => handle {
       log.info("Got NodeAssignment, overlay ready.");
-      // todo: filter node list for replication group
-      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Replication)) -> pLink)
-      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Global)) -> pLink)
       lut = Some(assignment);
     }
   }
 
   pLink uponEvent {
+    case PL_Deliver(self, UpdateNodes(nodes)) => handle{
+      log.info("Generating new LookupTable...");
+      lut = Some(LookupTable.generate(nodes.keySet));
+    }
+
+
     // forwards a message to responsible node for the key
     case PL_Deliver(src, RouteMsg(key,op:Op)) => handle {
 
