@@ -31,8 +31,7 @@ import se.sics.kompics.sl._
 import se.sics.kompics.Start
 import se.sics.kompics.network.Network
 import se.sics.kompics.timer._
-
-import collection.mutable;
+import collection.mutable
 
 object BootstrapServer {
   sealed trait State;
@@ -49,14 +48,14 @@ class BootstrapServer extends ComponentDefinition {
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val bootThreshold = cfg.getValue[Int]("id2203.project.bootThreshold");
-  private val active = mutable.HashSet.empty[NetAddress];
   private val ready = mutable.HashSet.empty[NetAddress];
+  private val nodes = mutable.Map.empty[NetAddress, String]
   private var initialAssignment: Option[NodeAssignment] = None;
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
       log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
-      active += self;
+      nodes.put(self, UUID.randomUUID().toString);
     }
   }
 
@@ -65,18 +64,18 @@ class BootstrapServer extends ComponentDefinition {
     case InitialAssignments(assignment) => handle {
       initialAssignment = Some(assignment);
       log.info("Seeding assignments..." + initialAssignment);
-      active foreach { node =>
-        trigger(PL_Send(node, Boot(assignment)) -> pLink);
+      nodes.keySet.foreach { node =>
+        trigger(PL_Send(node, Boot(assignment, nodes)) -> pLink);
       }
       ready += self;
     }
   }
 
   pLink uponEvent {
-    case PL_Deliver(src, CheckIn) => handle {
-      active += src;
-      log.info("{} hosts in active set.", active.size);
-      if (active.size >= bootThreshold) {
+    case PL_Deliver(src, CheckIn(h)) => handle {
+      nodes.put(src, h);
+      log.info("{} hosts in active set.", nodes.size);
+      if (nodes.size >= bootThreshold) {
         bootUp();
       }
     }
@@ -87,7 +86,7 @@ class BootstrapServer extends ComponentDefinition {
         log.info("Finished seeding. Bootstrapping complete.");
         initialAssignment match {
           case Some(assignment) => {
-            trigger(Booted(assignment) -> boot);
+            trigger(Booted(assignment, nodes) -> boot);
             suicide()
           }
           case None => {
@@ -101,6 +100,6 @@ class BootstrapServer extends ComponentDefinition {
 
   private def bootUp(): Unit = {
     log.info("Threshold reached. Generating assignments...");
-    trigger(UpdateNodes(active.toSet) -> boot);
+    trigger(UpdateNodes(nodes) -> boot);
   }
 }

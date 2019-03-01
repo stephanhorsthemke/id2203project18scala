@@ -1,11 +1,17 @@
 package se.kth.id2203.replicationController
 
-import se.kth.id2203.PerfectLink.{PL_Deliver, PerfectLinkPort}
+import javax.swing.plaf.BorderUIResource.BevelBorderUIResource
+import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
+import se.kth.id2203.BEB.Beb.{Global, Replication}
+import se.kth.id2203.Paxos.{C_Decide, C_Propose, PaxosPort}
+import se.kth.id2203.PerfectLink
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.bootstrapping._
 import se.kth.id2203.networking.NetAddress
 import se.kth.id2203.overlay.LookupTable
 import se.sics.kompics.sl.{ComponentDefinition, handle}
-import scala.collection.mutable.HashMap
+
+import scala.collection.mutable
 
 
 /**
@@ -25,22 +31,37 @@ import scala.collection.mutable.HashMap
   *   - inform others --> Consensus
   *   - adjust replicas
   */
+
+// TODO: generate the Lookuptable anew in the OverlayManager -> Is the generation deterministic with a specific set of nodes?
 class ReplicationController extends ComponentDefinition{
 
   val pLink = requires[PerfectLinkPort]
+  val beb = requires[BebPort]
   val boot = requires(Bootstrapping)
+  val paxos = requires[PaxosPort]
+
+
+  val self = cfg.getValue[NetAddress]("id2203.project.address");
+
 
   // The current agreed set of nodes
-  val nodes = HashMap.empty[String, NetAddress]
+  var nodes = mutable.Map.empty[NetAddress, String]
 
   // The proposed change of nodes
-  val newNodes = HashMap.empty[String, NetAddress]
+  var newNodes = mutable.Map.empty[NetAddress, String]
 
   //******* Handlers ******
   pLink uponEvent {
-    case PL_Deliver(src, CheckIn) => handle {
+    case PL_Deliver(src, CheckIn(h)) => handle {
+      if(newNodes == nodes){
+        if(!nodes.contains(src)){
+          trigger(C_Propose(newNodes) -> paxos)
+          //trigger(PL_Send(src, Boot()))
+        }
+      }else{
+        log.debug("Ongoing Connection - checkIn not possible:" + src )
+      }
       //TODO
-      //update list of nodes
       //send to new node, to get started
       //consensus to add the node
 
@@ -50,16 +71,27 @@ class ReplicationController extends ComponentDefinition{
       //If ready and consensus --> Add node
     }
   }
- /* boot uponEvent {
-    case GetInitialAssignments(n) => handle {
-      log.info("Setting the initial nodes");
-      this.nodes = n
-      logger.debug("Generated assignments:\n" + lut);
-      trigger(new InitialAssignments(lut) -> boot);
+
+
+  paxos uponEvent{
+    // TODO should we broadcast this globally?
+    case C_Decide(n: mutable.Map[NetAddress, String]) => handle{
+      nodes = n
+      newNodes = n
+      trigger(PL_Send(self, UpdateNodes(nodes)) -> pLink)
     }
   }
 
 
-*/
+  boot uponEvent {
+    case Booted(assignment: LookupTable, nodes) => handle {
+      log.info("Got NodeAssignment, overlay ready.");
+      // todo: filter node list for replication group
+      this.nodes = nodes
+      newNodes = nodes
+      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Replication)) -> pLink)
+      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Global)) -> pLink)
+    }
+  }
 
 }
