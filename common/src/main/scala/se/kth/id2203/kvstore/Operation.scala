@@ -28,12 +28,15 @@ import se.sics.kompics.KompicsEvent;
 
 trait Operation extends KompicsEvent {
   def id: UUID;
+  def opName: String;
   def key: String;
+  def value: Any;
 }
 
 @SerialVersionUID(0xfacc6612da2139eaL)
-case class Op(key: String, id: UUID = UUID.randomUUID()) extends Operation with Serializable {
-  def response(status: OpCode.OpCode): OpResponse = OpResponse(id, status);
+case class Op(opName: String,  key: String, value: Any = None, id: UUID = UUID.randomUUID()) extends Operation with Serializable {
+  def response(status: OpCode.OpCode): OpResponse = OpResponse(id, status, None);
+  def response(status: OpCode.OpCode, value: Any): OpResponse = OpResponse(id, status, value);
 }
 
 object OpCode {
@@ -46,7 +49,8 @@ object OpCode {
 trait OperationResponse extends KompicsEvent {
   def id: UUID;
   def status: OpCode.OpCode;
+  def value: Any;
 }
 
 @SerialVersionUID(0x0227a2aea45e5e75L)
-case class OpResponse(id: UUID, status: OpCode.OpCode) extends OperationResponse with Serializable;
+case class OpResponse(id: UUID, status: OpCode.OpCode, value: Any = None) extends OperationResponse with Serializable;

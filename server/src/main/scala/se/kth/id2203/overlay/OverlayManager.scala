@@ -23,15 +23,23 @@
  */
 package se.kth.id2203.overlay;
 
-import se.kth.id2203.bootstrapping._;
-import se.kth.id2203.networking._;
-import se.sics.kompics.sl._;
-import se.sics.kompics.network.Network;
-import se.sics.kompics.timer.Timer;
+import java.util.UUID
+
+import se.kth.id2203.BEB.Beb.{Global, Replication}
+import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
+import se.kth.id2203.bootstrapping._
+import se.kth.id2203.kvstore.OpCode.OpCode
+import se.kth.id2203.networking._
+import se.sics.kompics.sl._
+import se.sics.kompics.network.Network
+import se.sics.kompics.timer.Timer
+import se.kth.id2203.kvstore.{Op, OpCode, OpResponse}
+
 import util.Random;
 
 /**
- * The V(ery)S(imple)OverlayManager.
+ * The V(ery)A(dvanced)OverlayManager.
  * <p>
  * Keeps all nodes in a single partition in one replication group.
  * <p>
@@ -40,59 +48,90 @@ import util.Random;
  * <p>
  * @author Lars Kroll <lkroll@kth.se>
  */
-class VSOverlayManager extends ComponentDefinition {
+class VAOverlayManager extends ComponentDefinition {
 
   //******* Ports ******
   val route = provides(Routing);
   val boot = requires(Bootstrapping);
-  val net = requires[Network];
   val timer = requires[Timer];
+  val pLink = requires[PerfectLinkPort]
+  val bebRepl = requires[BebPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
+  var srcMap = scala.collection.mutable.Map.empty[UUID, NetAddress]
+
+
   //******* Handlers ******
   boot uponEvent {
     case GetInitialAssignments(nodes) => handle {
       log.info("Generating LookupTable...");
       val lut = LookupTable.generate(nodes);
-      logger.debug("Generated assignments:\n$lut");
+      logger.debug("Generated assignments:\n" + lut);
       trigger (new InitialAssignments(lut) -> boot);
     }
     case Booted(assignment: LookupTable) => handle {
       log.info("Got NodeAssignment, overlay ready.");
+      // todo: filter node list for replication group
+      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Replication)) -> pLink)
+      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Global)) -> pLink)
       lut = Some(assignment);
     }
   }
 
-  net uponEvent {
-    case NetMessage(header, RouteMsg(key, msg)) => handle {
+  pLink uponEvent {
+    // forwards a message to responsible node for the key
+    case PL_Deliver(src, RouteMsg(key,op:Op)) => handle {
+
+      srcMap += (op.id -> src);
+      // gets responsible node
       val nodes = lut.get.lookup(key);
+      // throws assertionException when nodes is empty
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
-      log.info(s"Forwarding message for key $key to $target");
-      trigger(NetMessage(header.src, target, msg) -> net);
+      log.info(s"Forwarding message for key $key to $target with $op");
+      trigger(PL_Send(target, op) -> pLink);
     }
-    case NetMessage(header, msg: Connect) => handle {
+
+    // sending the handles OP back to where it came from
+    case PL_Deliver(_ , opResp @ OpResponse(uuid,opCode: OpCode,_)) => handle{
+      var src: Option[NetAddress] = None
+      if(srcMap.contains(uuid)){
+        src = srcMap.remove(uuid)
+        trigger(PL_Send(src.get, opResp) -> pLink)
+        log.info("Sent OpResponse")
+      }else{
+        log.debug("No src for uuid known: either duplicate message or lost: " + opResp)
+      }
+
+
+    }
+    // Connectionrequest: send ACK when the system is ready to requester
+    case PL_Deliver(src, msg: Connect) => handle {
       lut match {
+        // do we already have a lookuptable?
         case Some(l) => {
-          log.debug("Accepting connection request from ${header.src}");
+          log.debug("Accepting connection request from " + src);
           val size = l.getNodes().size;
-          trigger (NetMessage(self, header.src, msg.ack(size)) -> net);
+          trigger (PL_Send(src, msg.ack(size)) -> pLink);
         }
-        case None => log.info("Rejecting connection request from ${header.src}, as system is not ready, yet.");
+        case None => log.info(s"Rejecting connection request from ${src}, as system is not ready, yet.");
       }
     }
   }
 
   route uponEvent {
+    // TODO DO we even need this
+    // sends message to responsible node for the key
     case RouteMsg(key, msg) => handle {
       val nodes = lut.get.lookup(key);
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
-      log.info(s"Routing message for key $key to $target");
-      trigger (NetMessage(self, target, msg) -> net);
+      log.info(s"ROUTING MESSAGE for key $key to $target");
+      trigger(PL_Send(target, msg) -> pLink);
+
     }
   }
 }

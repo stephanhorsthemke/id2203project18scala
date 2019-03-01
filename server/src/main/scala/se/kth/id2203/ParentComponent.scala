@@ -23,36 +23,63 @@
  */
 package se.kth.id2203;
 
+import se.kth.id2203.BEB.{Beb, BebPort}
+import se.kth.id2203.BEB.Beb.Replication
+import se.kth.id2203.DSM.{AtomicRegister, AtomicRegisterPort}
+import se.kth.id2203.PerfectLink._
 import se.kth.id2203.bootstrapping._
-import se.kth.id2203.kvstore.KVService;
-import se.kth.id2203.networking.NetAddress;
+import se.kth.id2203.kvstore.KVService
+import se.kth.id2203.networking.{NetAddress, NetAddressConverter, ScallopConverters}
 import se.kth.id2203.overlay._
 import se.sics.kompics.sl._
-import se.sics.kompics.Init;
-import se.sics.kompics.network.Network;
+import se.sics.kompics.Init
+import se.sics.kompics.network.Network
 import se.sics.kompics.timer.Timer;
 
 class ParentComponent extends ComponentDefinition {
+
 
   //******* Ports ******
   val net = requires[Network];
   val timer = requires[Timer];
   //******* Children ******
-  val overlay = create(classOf[VSOverlayManager], Init.NONE);
+  val self:NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
+
+  val beb = create(classOf[Beb], Init.NONE)
+
+  val pLink = create(classOf[PerfectLink], Init.NONE);
+  val overlay = create(classOf[VAOverlayManager], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
+  val ar = create(classOf[AtomicRegister], Init.NONE);
   val boot = cfg.readValue[NetAddress]("id2203.project.bootstrap-address") match {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None    => create(classOf[BootstrapServer], Init.NONE); // start in server mode
   }
 
+
+
+
   {
+
+    logger
+
     connect[Timer](timer -> boot);
-    connect[Network](net -> boot);
+    connect[PerfectLinkPort](pLink -> boot);
     // Overlay
     connect(Bootstrapping)(boot -> overlay);
-    connect[Network](net -> overlay);
+    connect[PerfectLinkPort](pLink -> overlay);
     // KV
     connect(Routing)(overlay -> kv);
-    connect[Network](net -> kv);
+    connect[PerfectLinkPort](pLink -> kv);
+    connect[AtomicRegisterPort](ar -> kv);
+    //Perfect Link
+    connect[Timer](timer -> pLink);
+    connect[Network](net -> pLink);
+    //BEB
+    connect[PerfectLinkPort](pLink -> beb);
+    //AR
+    connect[PerfectLinkPort](pLink -> ar)
+    connect[BebPort](beb -> ar)
+
   }
 }

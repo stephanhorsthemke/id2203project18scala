@@ -35,7 +35,7 @@ import org.rogach.scallop._
 class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   import ScallopConverters._;
 
-  version("Project18 Scala Server v1.0");
+  version("Project19 Scala Server v1.1 - Stephan and Lucian");
   banner("Usage: <call jar> [OPTIONS]");
   footer("\n");
 
@@ -64,6 +64,7 @@ object Main {
       case (None, None) => configSelf
       case (cip, cp)    => NetAddress(cip.getOrElse(configSelf.getIp()), cp.getOrElse(configSelf.getPort()))
     };
+
     configBuilder.setValue("id2203.project.address", self);
     if (conf.server.isSupplied) {
       configBuilder.setValue("id2203.project.bootstrap-address", conf.server());

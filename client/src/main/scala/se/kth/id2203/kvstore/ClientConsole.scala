@@ -34,6 +34,7 @@ import concurrent.duration._
 object ClientConsole {
   // Better build this statically. Has some overhead (building a lookup table).
   val simpleStr = P(CharsWhileIn(('0' to '9') ++ ('a' to 'z') ++ ('A' to 'Z'), 1).!);
+
   val colouredLayout = new ColoredPatternLayout("%d{[HH:mm:ss,SSS]} %-5p {%c{1}} %m%n");
 }
 
@@ -43,14 +44,16 @@ class ClientConsole(val service: ClientService) extends CommandConsole with Pars
   override def layout: Layout = colouredLayout;
   override def onInterrupt(): Unit = exit();
 
-  val opCommand = parsed(P("op" ~ " " ~ simpleStr), usage = "op <key>", descr = "Executes an op for <key>.") { key =>
-    println(s"Op with $key");
+  val opCommand = parsed(P("op" ~ " " ~ simpleStr ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "op <op> <key> <value>", descr = "Executes an <op> at <key>. In case of PUT it takes <value>") { parsed =>
+    println(s"Op with $parsed");
 
-    val fr = service.op(key);
+    var (op, key, value) = parsed
+
+    val fr = if (op == "GET") service.op(op, key) else service.op(op, key, value);
     out.println("Operation sent! Awaiting response...");
     try {
-      val r = Await.result(fr, 5.seconds);
-      out.println("Operation complete! Response was: " + r.status);
+      val r = Await.result(fr, 25.seconds);
+      out.println("Operation complete! Response was: " + r.value);
     } catch {
       case e: Throwable => logger.error("Error during op.", e);
     }

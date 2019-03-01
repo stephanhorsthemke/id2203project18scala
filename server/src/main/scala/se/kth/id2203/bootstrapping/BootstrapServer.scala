@@ -23,12 +23,15 @@
  */
 package se.kth.id2203.bootstrapping;
 
-import java.util.UUID;
-import se.kth.id2203.networking._;
-import se.sics.kompics.sl._;
-import se.sics.kompics.Start;
-import se.sics.kompics.network.Network;
-import se.sics.kompics.timer._;
+import java.util.UUID
+
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
+import se.kth.id2203.networking._
+import se.sics.kompics.sl._
+import se.sics.kompics.Start
+import se.sics.kompics.network.Network
+import se.sics.kompics.timer._
+
 import collection.mutable;
 
 object BootstrapServer {
@@ -36,7 +39,7 @@ object BootstrapServer {
   case object Collecting extends State;
   case object Seeding extends State;
   case object Done extends State;
-
+InitialAssignments
 }
 
 class BootstrapServer extends ComponentDefinition {
@@ -44,7 +47,7 @@ class BootstrapServer extends ComponentDefinition {
 
   //******* Ports ******
   val boot = provides(Bootstrapping);
-  val net = requires[Network];
+  val pLink = requires[PerfectLinkPort];
   val timer = requires[Timer];
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
@@ -58,7 +61,7 @@ class BootstrapServer extends ComponentDefinition {
   ctrl uponEvent {
     case _: Start => handle {
       log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
-      val timeout: Long = (cfg.getValue[Long]("id2203.project.keepAlivePeriod") * 2l);
+      val timeout: Long = cfg.getValue[Long]("id2203.project.keepAlivePeriod") * 2l;
       val spt = new SchedulePeriodicTimeout(timeout, timeout);
       spt.setTimeoutEvent(BSTimeout(spt));
       trigger (spt -> timer);
@@ -102,20 +105,20 @@ class BootstrapServer extends ComponentDefinition {
   boot uponEvent {
     case InitialAssignments(assignment) => handle {
       initialAssignment = Some(assignment);
-      log.info("Seeding assignments...");
+      log.info("Seeding assignments..." + initialAssignment);
       active foreach { node =>
-        trigger(NetMessage(self, node, Boot(assignment)) -> net);
+        trigger(PL_Send(node, Boot(assignment)) -> pLink);
       }
       ready += self;
     }
   }
 
-  net uponEvent {
-    case NetMessage(header, CheckIn) => handle {
-      active += header.src;
+  pLink uponEvent {
+    case PL_Deliver(src, CheckIn) => handle {
+      active += src;
     }
-    case NetMessage(header, Ready) => handle {
-      ready += header.src;
+    case PL_Deliver(src, Ready) => handle {
+      ready += src;
     }
   }
 

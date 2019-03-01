@@ -23,9 +23,11 @@
  */
 package se.kth.id2203.networking
 
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import se.sics.kompics.network.{ Address, Header, Msg, Transport };
+import java.math.BigInteger
+import java.net.InetAddress
+import java.net.InetSocketAddress
+
+import se.sics.kompics.network.{Address, Header, Msg, Transport}
 import se.sics.kompics.KompicsEvent;
 
 object NetAddress {
@@ -43,6 +45,33 @@ final case class NetAddress(isa: InetSocketAddress) extends Address with Seriali
   override def sameHostAs(other: Address): Boolean = {
     this.isa.equals(other.asSocket());
   }
+
+  def toLong(): Long ={
+    val addrB = new BigInteger(1, this.getIp().getAddress).toString(2);
+    val portB = Integer.toBinaryString(this.getPort());
+
+    val bin = addrB + portB;
+    new BigInteger(bin, 2).longValue();
+  }
+
+  // todo: delete if not necessay anymore
+  /*def hasBiggerRankThan(netAddress: NetAddress): Boolean = {
+    for (i <- 0 to 3) {
+      if (this.getIp().getAddress()(i).toInt > netAddress.getIp().getAddress()(i).toInt) {
+        return true;
+      }else if (this.getIp().getAddress()(i).toInt < netAddress.getIp().getAddress()(i).toInt) {
+        return false;
+      }
+    }
+    if (this.getPort() > netAddress.getPort()){
+      return true;
+    } else if(this.getPort() < netAddress.getPort()){
+      return false;
+    } else{
+      throw new Exception("Address and port seem to be the same.")
+    }
+
+  }*/
 }
 
 @SerialVersionUID(0x6370ad801a3ed0c7L)
@@ -53,7 +82,7 @@ final case class NetHeader(src: NetAddress, dst: NetAddress, proto: Transport) e
 }
 
 @SerialVersionUID(0x5c49aa68999b9d1dL)
-final case class NetMessage[C <: KompicsEvent](header: NetHeader, payload: C) extends Msg[NetAddress, NetHeader] with Serializable {
+final case class NetMessage[C <: KompicsEvent](header: NetHeader, payload: C) extends   Msg[NetAddress, NetHeader] with Serializable {
   override def getDestination(): NetAddress = header.dst;
   override def getHeader(): NetHeader = header;
   override def getProtocol(): Transport = header.proto;
