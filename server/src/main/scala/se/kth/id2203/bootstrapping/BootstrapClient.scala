@@ -41,7 +41,6 @@ object BootstrapClient {
 class BootstrapClient extends ComponentDefinition {
 
   //******* Ports ******
-  val bootstrap = provides(Bootstrapping);
   val pLink = requires[PerfectLinkPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
@@ -52,15 +51,6 @@ class BootstrapClient extends ComponentDefinition {
     case _: Start => handle {
       log.debug("Starting bootstrap client on {}", self);
       trigger(PL_Send(server, CheckIn) -> pLink);
-    }
-  }
-
-  pLink uponEvent {
-    case PL_Deliver(src, Boot(assignment, nodes)) => handle {
-      log.info("{} Booting up.", self);
-      trigger(Booted(assignment, nodes) -> bootstrap);
-      trigger(PL_Send(server, Ready) -> pLink);
-      suicide()
     }
   }
 }

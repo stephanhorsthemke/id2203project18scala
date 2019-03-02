@@ -25,32 +25,22 @@ package se.kth.id2203.bootstrapping;
 
 import java.util.UUID
 
+import se.kth.id2203.PerfectLink
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking._
+import se.kth.id2203.replicationController.UpdateNodes
 import se.sics.kompics.sl._
 import se.sics.kompics.Start
-import se.sics.kompics.network.Network
-import se.sics.kompics.timer._
-import collection.mutable
 
-object BootstrapServer {
-  sealed trait State;
-  case object Collecting extends State;
-  case object Seeding extends State;
-  case object Done extends State;
-InitialAssignments
-}
+import collection.mutable
 
 class BootstrapServer extends ComponentDefinition {
   //******* Ports ******
-  val boot = provides(Bootstrapping);
   val pLink = requires[PerfectLinkPort];
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val bootThreshold = cfg.getValue[Int]("id2203.project.bootThreshold");
-  private val ready = mutable.HashSet.empty[NetAddress];
-  private val nodes = mutable.HashSet.empty[NetAddress]
-  private var initialAssignment: Option[NodeAssignment] = None;
+  private var nodes = mutable.HashSet.empty[NetAddress]
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
@@ -60,46 +50,18 @@ class BootstrapServer extends ComponentDefinition {
   }
 
 
-  boot uponEvent {
-    case InitialAssignments(assignment) => handle {
-      initialAssignment = Some(assignment);
-      log.info("Seeding assignments..." + initialAssignment);
-      nodes.foreach { node =>
-        trigger(PL_Send(node, Boot(assignment, nodes)) -> pLink);
-      }
-      ready += self;
-    }
-  }
-
   pLink uponEvent {
     case PL_Deliver(src, CheckIn) => handle {
       nodes += src
       log.info("{} hosts in active set.", nodes.size);
       if (nodes.size >= bootThreshold) {
-        bootUp();
-      }
-    }
-    case PL_Deliver(src, Ready) => handle {
-      ready += src;
-      log.info("{} hosts in ready set.", ready.size);
-      if (ready.size >= bootThreshold) {
-        log.info("Finished seeding. Bootstrapping complete.");
-        initialAssignment match {
-          case Some(assignment) => {
-            trigger(Booted(assignment, nodes) -> boot);
-            suicide()
-          }
-          case None => {
-            logger.error(s"No initial assignment received at bootThreshold. Ready nodes: $ready");
-            suicide();
-          }
+        log.info("Threshold reached.");
+        nodes.foreach {
+          n => trigger(PL_Send(n, Booted(nodes)) -> pLink)
         }
+        suicide()
       }
     }
   }
 
-  private def bootUp(): Unit = {
-    log.info("Threshold reached. Generating assignments...");
-    trigger(UpdateNodes(nodes) -> boot);
-  }
 }

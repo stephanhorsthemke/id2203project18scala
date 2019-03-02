@@ -35,7 +35,10 @@ import se.sics.kompics.sl._
 import se.sics.kompics.network.Network
 import se.sics.kompics.timer.Timer
 import se.kth.id2203.kvstore.{Op, OpCode, OpResponse}
+import se.kth.id2203.replicationController.UpdateNodes
 
+import scala.collection.immutable.HashSet
+import scala.collection.mutable
 import util.Random;
 
 /**
@@ -52,7 +55,6 @@ class VAOverlayManager extends ComponentDefinition {
 
   //******* Ports ******
   val route = provides(Routing);
-  val boot = requires(Bootstrapping);
   val timer = requires[Timer];
   val pLink = requires[PerfectLinkPort]
   val bebRepl = requires[BebPort]
@@ -63,26 +65,12 @@ class VAOverlayManager extends ComponentDefinition {
 
 
   //******* Handlers ******
-  boot uponEvent {
-    case UpdateNodes(nodes) => handle {
-      log.info("Generating LookupTable...");
-      val lut = LookupTable.generate(nodes);
-      logger.debug("Generated assignments:\n" + lut);
-      trigger (new InitialAssignments(lut) -> boot);
-    }
-    case Booted(assignment: LookupTable, _) => handle {
-      log.info("Got NodeAssignment, overlay ready.");
-      lut = Some(assignment);
-      trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(), Replication)) -> pLink)
-      trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(), Global)) -> pLink)
-    }
-  }
-
   pLink uponEvent {
-    case PL_Deliver(_, UpdateNodes(nodes)) => handle{
-      lut = Some(LookupTable.generate(nodes));
-      trigger(PL_Send(self, BEB_Topology(nodes, Replication)) -> pLink)
-      trigger(PL_Send(self, BEB_Topology(nodes, Global)) -> pLink)
+    case PL_Deliver(_, UpdateNodes(n: Set[NetAddress])) => handle{
+      log.debug("Updated Nodes: " + n)
+      trigger(PL_Send(self, BEB_Topology(n, Replication)) -> pLink)
+      lut = Some(LookupTable.generate(n));
+      trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink)
       log.info("Generating new LookupTable..." + lut.getOrElse(Set.empty).toString());
     }
 

@@ -16,3 +16,5 @@ case class Accept(acceptBallot: (Int, Int), proposedValue: Any, cycle:Int) exten
 case class Accepted(acceptedBallot: (Int, Int), cycle:Int) extends KompicsEvent;
 case class Nack(ballot: (Int, Int), cycle:Int ) extends KompicsEvent;
 case class Decided(decidedValue: Option[Any], cycle:Int) extends KompicsEvent;
+
+case class ProcessNumber(n :Int) extends KompicsEvent
