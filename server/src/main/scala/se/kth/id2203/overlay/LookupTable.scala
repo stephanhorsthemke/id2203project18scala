@@ -49,7 +49,6 @@ class LookupTable extends NodeAssignment with Serializable {
     case (acc, kv) => acc ++ kv._2
   }
 
-
   override def toString(): String = {
     val sb = new StringBuilder();
     sb.append("LookupTable(\n");
@@ -57,7 +56,6 @@ class LookupTable extends NodeAssignment with Serializable {
     sb.append(")");
     return sb.toString();
   }
-
 }
 
 object LookupTable {

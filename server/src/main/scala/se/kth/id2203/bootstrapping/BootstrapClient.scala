@@ -47,15 +47,11 @@ class BootstrapClient extends ComponentDefinition {
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val server = cfg.getValue[NetAddress]("id2203.project.bootstrap-address");
 
-
-  // The uuid or hashed used for the list of nodes!
-  val uuid = UUID.randomUUID()
-
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
       log.debug("Starting bootstrap client on {}", self);
-      trigger(PL_Send(server, CheckIn(uuid.toString)) -> pLink);
+      trigger(PL_Send(server, CheckIn) -> pLink);
     }
   }
 

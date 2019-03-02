@@ -4,7 +4,7 @@ import javax.swing.plaf.BorderUIResource.BevelBorderUIResource
 import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
 import se.kth.id2203.BEB.Beb.{Global, Replication}
 import se.kth.id2203.Paxos.{C_Decide, C_Propose, PaxosPort}
-import se.kth.id2203.PerfectLink
+import se.kth.id2203.{PerfectLink, bootstrapping}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.bootstrapping._
 import se.kth.id2203.networking.NetAddress
@@ -45,39 +45,38 @@ class ReplicationController extends ComponentDefinition{
 
 
   // The current agreed set of nodes
-  var nodes = mutable.Map.empty[NetAddress, String]
+  var nodes = mutable.HashSet.empty[NetAddress]
 
   // The proposed change of nodes
-  var newNodes = mutable.Map.empty[NetAddress, String]
+  var newNodes = mutable.HashSet.empty[NetAddress]
 
   //******* Handlers ******
   pLink uponEvent {
-    case PL_Deliver(src, CheckIn(h)) => handle {
+    case PL_Deliver(src, CheckIn) => handle {
       if(newNodes == nodes){
-        if(!nodes.contains(src)){
+        if(!nodes(src)){
+          newNodes += src
           trigger(C_Propose(newNodes) -> paxos)
-          //trigger(PL_Send(src, Boot()))
+          trigger(PL_Send(src, UpdateNodes(nodes)) -> pLink)
+          log.debug("Send updatesNodes topology to: " + src)
+        }else{
+          log.debug("Deleting duplicate checkin")
         }
       }else{
         log.debug("Ongoing Connection - checkIn not possible:" + src )
       }
-      //TODO
-      //send to new node, to get started
-      //consensus to add the node
-
     }
+
     case PL_Deliver(src, Ready) => handle {
-      //TODO
-      //If ready and consensus --> Add node
+      log.debug("new Node is ready")
     }
   }
 
-
   paxos uponEvent{
-    // TODO should we broadcast this globally?
-    case C_Decide(n: mutable.Map[NetAddress, String]) => handle{
-      nodes = n
-      newNodes = n
+    case C_Decide(n: Option[mutable.HashSet[NetAddress]]) => handle{
+      nodes = n.get
+      newNodes = n.get
+      log.info("Send decision to overlay manager: " + n)
       trigger(PL_Send(self, UpdateNodes(nodes)) -> pLink)
     }
   }
@@ -85,12 +84,8 @@ class ReplicationController extends ComponentDefinition{
 
   boot uponEvent {
     case Booted(assignment: LookupTable, nodes) => handle {
-      log.info("Got NodeAssignment, overlay ready.");
-      // todo: filter node list for replication group
       this.nodes = nodes
       newNodes = nodes
-      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Replication)) -> pLink)
-      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Global)) -> pLink)
     }
   }
 

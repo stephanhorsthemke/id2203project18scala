@@ -7,6 +7,7 @@ import se.kth.id2203.networking.NetAddress
 import se.sics.kompics.sl.ComponentDefinition
 import se.sics.kompics.sl._
 
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 
@@ -30,12 +31,15 @@ class Paxos() extends ComponentDefinition {
   var rank: Int = self.getPort()
   var numProcesses: Int = 3
 
+  // incremented after decision for new cycle of consensus
+  var cycle = 1;
+
+
   //Proposer State
   var round = 0;
   var proposedValue: Option[Any] = None;
   var promises: ListBuffer[((Int, Int), Option[Any])] = ListBuffer.empty;
   var numOfAccepts = 0;
-  var decided = false;
 
   //Acceptor State
   var promisedBallot = (0, 0);
@@ -43,12 +47,11 @@ class Paxos() extends ComponentDefinition {
   var acceptedValue: Option[Any] = None;
 
   def propose() = {
-    if (!decided){
-      round = round + 1;
-      numOfAccepts = 0;
-      promises = ListBuffer.empty;
-      trigger(BEB_Broadcast(Prepare(round, rank), Global) -> beb);
-    }
+    round = round + 1;
+    numOfAccepts = 0;
+    promises = ListBuffer.empty;
+    log.debug("Sending Prepare Broadcast")
+    trigger(BEB_Broadcast(Prepare((round, rank), cycle), Global) -> beb)
   }
 
   // return the highest tuple
@@ -63,7 +66,7 @@ class Paxos() extends ComponentDefinition {
   paxos uponEvent {
     case C_Propose(value) => handle {
 
-      println(rank + " :: " + System.currentTimeMillis() + ":: new Propose:  " + value);
+      println(cycle + " :: " + System.currentTimeMillis() + ":: new Propose:  " + value );
       proposedValue = Some(value);
       propose();
     }
@@ -72,41 +75,50 @@ class Paxos() extends ComponentDefinition {
 
   beb uponEvent {
 
-    case BEB_Deliver(src, prep: Prepare, _) => handle {
+    case BEB_Deliver(src, prep: Prepare, _) if prep.cycle == cycle => handle {
       var ballot = prep.proposalBallot
       if(promisedBallot < ballot){
         promisedBallot = ballot;
-        println(rank + " :: " + System.currentTimeMillis() + ":: Promise Ballot:  " + ballot);
-        trigger(PL_Send(src, Promise(promisedBallot, acceptedBallot, acceptedValue)) -> plink);
+        println(cycle + " :: " + System.currentTimeMillis() + ":: Promise Ballot:  " + ballot);
+        trigger(PL_Send(src, Promise(promisedBallot, acceptedBallot, acceptedValue, cycle)) -> plink);
       }else{
-        trigger(PL_Send(src, Nack(ballot)) -> plink);
+        trigger(PL_Send(src, Nack(ballot, cycle)) -> plink);
       }
     };
 
-    case BEB_Deliver(src, acc: Accept, _) => handle {
+    case BEB_Deliver(src, acc: Accept, _) if acc.cycle == cycle => handle {
       var ballot = acc.acceptBallot;
       if(promisedBallot <= ballot){
         promisedBallot = ballot;
         acceptedBallot = ballot;
         acceptedValue = Some(acc.proposedValue);
-        println(rank + " :: " + System.currentTimeMillis() + ":: Accepting BAllot:  " + ballot);
-        trigger(PL_Send(src, Accepted(ballot)) -> plink);
+        println(cycle + " :: " + System.currentTimeMillis() + ":: Accepting BAllot:  " + ballot);
+        trigger(PL_Send(src, Accepted(ballot, cycle)) -> plink);
       }else{
-        trigger(PL_Send(src, Nack(ballot)) -> plink);
+        trigger(PL_Send(src, Nack(ballot, cycle)) -> plink);
       }
     };
 
-    case BEB_Deliver(src, dec : Decided , _) => handle {
-      if(!decided){
-        trigger(C_Decide(dec.decidedValue) -> paxos);
-        decided = true;
-      }
+    case BEB_Deliver(src, Decided(decValue, c) , _) if c==cycle => handle {
+
+      trigger(C_Decide(decValue) -> paxos)
+      cycle += 1
+      numProcesses = decValue.size
+
+      round = 0
+      proposedValue = None
+      promises = ListBuffer.empty
+      numOfAccepts = 0
+      promisedBallot = (0, 0)
+      acceptedBallot = (0, 0)
+      acceptedValue = None
     }
+
   }
 
   plink uponEvent {
 
-    case PL_Deliver(src, prepAck: Promise) => handle {
+    case PL_Deliver(src, prepAck: Promise) if prepAck.cycle == cycle => handle {
       if ((round, rank) == prepAck.promiseBallot) {
         promises = promises ++ ListBuffer((prepAck.acceptedBallot, prepAck.acceptedValue));
 
@@ -116,25 +128,24 @@ class Paxos() extends ComponentDefinition {
           if (value.isDefined){
             proposedValue = value;
           }
-          println(rank + " :: " + System.currentTimeMillis() + ":: Majority Promises:  " + proposedValue + "promises.size: " + promises.size);
-          trigger(BEB_Broadcast(Accept((round, rank), proposedValue), Global) -> beb);
+          println(cycle + " :: " + System.currentTimeMillis() + ":: Majority Promises:  " + proposedValue + "promises.size: " + promises.size);
+          trigger(BEB_Broadcast(Accept((round, rank), proposedValue.get, cycle), Global) -> beb);
         }
       }
     };
 
-    case PL_Deliver(src, accAck: Accepted) => handle {
+    case PL_Deliver(src, accAck: Accepted) if accAck.cycle == cycle => handle {
       if ((round, rank) == accAck.acceptedBallot) {
         numOfAccepts = numOfAccepts + 1;
         if(numOfAccepts  ==  math.ceil((numProcesses+1)/2.0).toInt){
-          println(rank + " :: " + System.currentTimeMillis() + ":: Decided:  " + proposedValue);
-          trigger(BEB_Broadcast(Decided(proposedValue), Global) -> beb);
+          println(cycle + " :: " + System.currentTimeMillis() + ":: Decided:  " + proposedValue);
+          trigger(BEB_Broadcast(Decided(proposedValue, cycle), Global) -> beb);
         }
 
       }
     };
 
-    case PL_Deliver(src, nack: Nack) => handle {
-      println(rank + " :: " + System.currentTimeMillis() + ":: NACK:  " + nack);
+    case PL_Deliver(src, nack:Nack) if nack.cycle==cycle => handle {
       if ((round, rank) == nack.ballot) {
         propose();
       }

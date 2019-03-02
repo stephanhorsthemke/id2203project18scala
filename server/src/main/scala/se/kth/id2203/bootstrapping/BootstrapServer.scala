@@ -49,13 +49,13 @@ class BootstrapServer extends ComponentDefinition {
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val bootThreshold = cfg.getValue[Int]("id2203.project.bootThreshold");
   private val ready = mutable.HashSet.empty[NetAddress];
-  private val nodes = mutable.Map.empty[NetAddress, String]
+  private val nodes = mutable.HashSet.empty[NetAddress]
   private var initialAssignment: Option[NodeAssignment] = None;
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
       log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
-      nodes.put(self, UUID.randomUUID().toString);
+      nodes += self
     }
   }
 
@@ -64,7 +64,7 @@ class BootstrapServer extends ComponentDefinition {
     case InitialAssignments(assignment) => handle {
       initialAssignment = Some(assignment);
       log.info("Seeding assignments..." + initialAssignment);
-      nodes.keySet.foreach { node =>
+      nodes.foreach { node =>
         trigger(PL_Send(node, Boot(assignment, nodes)) -> pLink);
       }
       ready += self;
@@ -72,8 +72,8 @@ class BootstrapServer extends ComponentDefinition {
   }
 
   pLink uponEvent {
-    case PL_Deliver(src, CheckIn(h)) => handle {
-      nodes.put(src, h);
+    case PL_Deliver(src, CheckIn) => handle {
+      nodes += src
       log.info("{} hosts in active set.", nodes.size);
       if (nodes.size >= bootThreshold) {
         bootUp();

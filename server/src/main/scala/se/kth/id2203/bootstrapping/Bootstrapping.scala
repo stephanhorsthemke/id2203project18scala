@@ -11,6 +11,6 @@ object Bootstrapping extends Port {
   request[InitialAssignments];
 }
 
-case class UpdateNodes(nodes: mutable.Map[NetAddress, String]) extends KompicsEvent;
-case class Booted(assignment: NodeAssignment, node: mutable.Map[NetAddress, String]) extends KompicsEvent;
+case class UpdateNodes(nodes: mutable.HashSet[NetAddress]) extends KompicsEvent;
+case class Booted(assignment: NodeAssignment, node: mutable.HashSet[NetAddress]) extends KompicsEvent;
 case class InitialAssignments(assignment: NodeAssignment) extends KompicsEvent;
