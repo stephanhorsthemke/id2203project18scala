@@ -54,6 +54,10 @@ final case class NetAddress(isa: InetSocketAddress) extends Address with Seriali
     new BigInteger(bin, 2).longValue();
   }
 
+  override def toString(): String = {
+    getIp() + ":" + getPort()
+  }
+
   // todo: delete if not necessay anymore
   /*def hasBiggerRankThan(netAddress: NetAddress): Boolean = {
     for (i <- 0 to 3) {

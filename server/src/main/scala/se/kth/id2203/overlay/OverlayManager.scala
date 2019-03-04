@@ -68,9 +68,9 @@ class VAOverlayManager extends ComponentDefinition {
   pLink uponEvent {
     case PL_Deliver(_, UpdateNodes(n: Set[NetAddress])) => handle{
       log.debug("Updated Nodes: " + n)
-      trigger(PL_Send(self, BEB_Topology(n, Replication)) -> pLink)
       lut = Some(LookupTable.generate(n));
       trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink)
+      trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink)
       log.info("Generating new LookupTable..." + lut.getOrElse(Set.empty).toString());
     }
 
@@ -80,6 +80,7 @@ class VAOverlayManager extends ComponentDefinition {
       srcMap += (op.id -> src);
       // gets responsible node
       val nodes = lut.get.lookup(key);
+      log.info(s"Choose from $nodes");
       // throws assertionException when nodes is empty
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
@@ -107,7 +108,7 @@ class VAOverlayManager extends ComponentDefinition {
         // do we already have a lookuptable?
         case Some(l) => {
           log.debug("Accepting connection request from " + src);
-          val size = l.getNodes().size;
+          val size = l.getNodes.size;
           trigger (PL_Send(src, msg.ack(size)) -> pLink);
         }
         case None => log.info(s"Rejecting connection request from ${src}, as system is not ready, yet.");

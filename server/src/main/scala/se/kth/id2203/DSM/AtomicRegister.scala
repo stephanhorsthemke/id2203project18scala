@@ -20,8 +20,7 @@ class AtomicRegister() extends ComponentDefinition {
   val pLink: PositivePort[PerfectLinkPort] = requires[PerfectLinkPort];
   val beb: PositivePort[BebPort] = requires[BebPort];
 
-  // todo: set according to number of nodes in partition
-  val n: Int = 3
+  var n: Int = 3  // size of partition
   val self: NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
   val rank: Int = self.getPort();
 
@@ -127,6 +126,11 @@ class AtomicRegister() extends ComponentDefinition {
           }
         }
       }
+    }
+
+    // sets the size of the partition
+    case PL_Deliver(this.self, BEB_Topology(addr: Set[NetAddress], Replication)) => handle {
+      n = addr.size;
     }
   }
 }
