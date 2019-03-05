@@ -39,68 +39,18 @@ object BootstrapClient {
 }
 
 class BootstrapClient extends ComponentDefinition {
-  import BootstrapClient._;
 
   //******* Ports ******
-  val bootstrap = provides(Bootstrapping);
-  val timer = requires[Timer];
   val pLink = requires[PerfectLinkPort]
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val server = cfg.getValue[NetAddress]("id2203.project.bootstrap-address");
 
-  private var state: State = Waiting;
-
-  private var timeoutId: Option[UUID] = None;
-
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
       log.debug("Starting bootstrap client on {}", self);
-      val timeout: Long = cfg.getValue[Long]("id2203.project.keepAlivePeriod");
-      val spt = new SchedulePeriodicTimeout(timeout, timeout);
-      spt.setTimeoutEvent(BSTimeout(spt));
-      trigger (spt -> timer);
-      timeoutId = Some(spt.getTimeoutEvent().getTimeoutId());
-    }
-  }
-
-  timer uponEvent {
-    case BSTimeout(_) => handle {
-      state match {
-        case Waiting => {
-          trigger(PL_Send(server, CheckIn) -> pLink);
-        }
-        case Started => {
-          trigger(PL_Send(server, Ready) -> pLink);
-          suicide();
-        }
-      }
-    }
-  }
-
-  pLink uponEvent {
-    case PL_Deliver(src, Boot(assignment)) => handle {
-      state match {
-        case Waiting => {
-          log.info("{} Booting up.", self);
-          trigger(Booted(assignment) -> bootstrap);
-          timeoutId match {
-            case Some(tid) => trigger(new CancelPeriodicTimeout(tid) -> timer);
-            case None      => // nothing to cancel
-          }
-          trigger(PL_Send(server, Ready) -> pLink);
-          state = Started;
-        }
-        case _ => // ignore
-      }
-    }
-  }
-
-  override def tearDown(): Unit = {
-    timeoutId match {
-      case Some(tid) => trigger(new CancelPeriodicTimeout(tid) -> timer);
-      case None      => // nothing to cancel
+      trigger(PL_Send(server, CheckIn) -> pLink);
     }
   }
 }

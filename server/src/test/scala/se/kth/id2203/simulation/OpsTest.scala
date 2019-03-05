@@ -56,7 +56,10 @@ class OpsTest extends FlatSpec with Matchers {
   //    }
   //  }
 
-  "Simple Operations" should "not be implemented" in { // well of course eventually they should be implemented^^
+
+
+  // Sends 10 PUTs waits and GETs every PUT once
+  "Simple Operation" should "Ok" in { // well of course eventually they should be implemented^^
     val seed = 123l;
     JSimulationScenario.setSeed(seed);
     val simpleBootScenario = SimpleScenario.scenario(3);
@@ -64,8 +67,8 @@ class OpsTest extends FlatSpec with Matchers {
     SimulationResult += ("messages" -> nMessages);
     simpleBootScenario.simulate(classOf[LauncherComp]);
     for (i <- 0 to nMessages) {
-      SimulationResult.get[String](s"test$i") should be (Some("NotImplemented"));
-      // of course the correct response should be Success not NotImplemented, but like this the test passes
+      SimulationResult.get[String](s"PUT$i") should be (Some("Ok"));
+      SimulationResult.get[String](s"GET$i") should be (Some("Ok"));
     }
   }
 
@@ -79,7 +82,7 @@ object SimpleScenario {
 
   private def intToServerAddress(i: Int): Address = {
     try {
-      NetAddress(InetAddress.getByName("192.193.0." + i), 45678);
+      NetAddress(InetAddress.getByName("192.193.0.1"), 45678 + i);
     } catch {
       case ex: UnknownHostException => throw new RuntimeException(ex);
     }
@@ -113,7 +116,7 @@ object SimpleScenario {
     val conf = Map(
       "id2203.project.address" -> selfAddr,
       "id2203.project.bootstrap-address" -> intToServerAddress(1));
-    StartNode(selfAddr, Init.none[ScenarioClient], conf);
+    StartNode(selfAddr, Init.none[ScenarioParent], conf);
   };
 
   def scenario(servers: Int): JSimulationScenario = {
@@ -122,7 +125,7 @@ object SimpleScenario {
     val startClients = raise(1, startClientOp, 1.toN).arrival(constant(1.second));
 
     startCluster andThen
-      10.seconds afterTermination startClients andThen
+      10.seconds afterStart startClients andThen
       100.seconds afterTermination Terminate
   }
 

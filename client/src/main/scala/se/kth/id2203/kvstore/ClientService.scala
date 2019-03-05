@@ -105,22 +105,22 @@ class ClientService extends ComponentDefinition {
   }
 
   loopbck uponEvent {
-    case OpWithPromise(opObj, promise) => handle {
-      val rm = RouteMsg(opObj.key, opObj); // don't know which partition is responsible, so ask the bootstrap server to forward it
+    case OpWithPromise(op, promise) => handle {
+      val rm = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
       trigger(PL_Send(server, rm) -> pLink);
-      pending += (opObj.id -> promise);
+      pending += (op.id -> promise);
     }
   }
 
   def op(opName: String, key: String): Future[OpResponse] = {
-    val opObj = Op(opName, key);
-    val owf = OpWithPromise(opObj);
+    val op = Op(opName, key);
+    val owf = OpWithPromise(op);
     trigger(owf -> onSelf);
     owf.promise.future
   }
   def op(opName: String, key: String, value: String): Future[OpResponse] = {
-    val opObj = Op(opName, key, value);
-    val owf = OpWithPromise(opObj);
+    val op = Op(opName,key, value);
+    val owf = OpWithPromise(op);
     trigger(owf -> onSelf);
     owf.promise.future
   }

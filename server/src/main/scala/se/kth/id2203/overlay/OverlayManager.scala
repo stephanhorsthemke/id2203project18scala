@@ -35,7 +35,10 @@ import se.sics.kompics.sl._
 import se.sics.kompics.network.Network
 import se.sics.kompics.timer.Timer
 import se.kth.id2203.kvstore.{Op, OpCode, OpResponse}
+import se.kth.id2203.nodeController.UpdateNodes
 
+import scala.collection.immutable.HashSet
+import scala.collection.mutable
 import util.Random;
 
 /**
@@ -52,7 +55,6 @@ class VAOverlayManager extends ComponentDefinition {
 
   //******* Ports ******
   val route = provides(Routing);
-  val boot = requires(Bootstrapping);
   val timer = requires[Timer];
   val pLink = requires[PerfectLinkPort]
   val bebRepl = requires[BebPort]
@@ -63,29 +65,23 @@ class VAOverlayManager extends ComponentDefinition {
 
 
   //******* Handlers ******
-  boot uponEvent {
-    case GetInitialAssignments(nodes) => handle {
-      log.info("Generating LookupTable...");
-      val lut = LookupTable.generate(nodes);
-      logger.debug("Generated assignments:\n" + lut);
-      trigger (new InitialAssignments(lut) -> boot);
-    }
-    case Booted(assignment: LookupTable) => handle {
-      log.info("Got NodeAssignment, overlay ready.");
-      // todo: filter node list for replication group
-      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Replication)) -> pLink)
-      trigger(PL_Send(self, BEB_Topology(assignment.getNodes(), Global)) -> pLink)
-      lut = Some(assignment);
-    }
-  }
-
   pLink uponEvent {
+    case PL_Deliver(_, UpdateNodes(n: Set[NetAddress])) => handle{
+      log.debug("Updated Nodes: " + n)
+      lut = Some(LookupTable.generate(n));
+      trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink)
+      trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink)
+      log.info("Generating new LookupTable..." + lut.getOrElse(Set.empty).toString());
+    }
+
+
     // forwards a message to responsible node for the key
     case PL_Deliver(src, RouteMsg(key,op:Op)) => handle {
-
+      log.debug("Received RouteMessage")
       srcMap += (op.id -> src);
       // gets responsible node
       val nodes = lut.get.lookup(key);
+      log.info(s"Choose from $nodes");
       // throws assertionException when nodes is empty
       assert(!nodes.isEmpty);
       val i = Random.nextInt(nodes.size);
@@ -113,7 +109,7 @@ class VAOverlayManager extends ComponentDefinition {
         // do we already have a lookuptable?
         case Some(l) => {
           log.debug("Accepting connection request from " + src);
-          val size = l.getNodes().size;
+          val size = l.getNodes.size;
           trigger (PL_Send(src, msg.ack(size)) -> pLink);
         }
         case None => log.info(s"Rejecting connection request from ${src}, as system is not ready, yet.");

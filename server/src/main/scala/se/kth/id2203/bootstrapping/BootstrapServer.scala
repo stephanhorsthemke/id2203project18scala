@@ -25,113 +25,43 @@ package se.kth.id2203.bootstrapping;
 
 import java.util.UUID
 
+import se.kth.id2203.PerfectLink
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking._
+import se.kth.id2203.nodeController.UpdateNodes
 import se.sics.kompics.sl._
 import se.sics.kompics.Start
-import se.sics.kompics.network.Network
-import se.sics.kompics.timer._
 
-import collection.mutable;
-
-object BootstrapServer {
-  sealed trait State;
-  case object Collecting extends State;
-  case object Seeding extends State;
-  case object Done extends State;
-InitialAssignments
-}
+import collection.mutable
 
 class BootstrapServer extends ComponentDefinition {
-  import BootstrapServer._;
-
   //******* Ports ******
-  val boot = provides(Bootstrapping);
   val pLink = requires[PerfectLinkPort];
-  val timer = requires[Timer];
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val bootThreshold = cfg.getValue[Int]("id2203.project.bootThreshold");
-  private var state: State = Collecting;
-  private var timeoutId: Option[UUID] = None;
-  private val active = mutable.HashSet.empty[NetAddress];
-  private val ready = mutable.HashSet.empty[NetAddress];
-  private var initialAssignment: Option[NodeAssignment] = None;
+  private var nodes = mutable.HashSet.empty[NetAddress]
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
       log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
-      val timeout: Long = cfg.getValue[Long]("id2203.project.keepAlivePeriod") * 2l;
-      val spt = new SchedulePeriodicTimeout(timeout, timeout);
-      spt.setTimeoutEvent(BSTimeout(spt));
-      trigger (spt -> timer);
-      timeoutId = Some(spt.getTimeoutEvent().getTimeoutId());
-      active += self;
+      nodes += self
     }
   }
 
-  timer uponEvent {
-    case BSTimeout(_) => handle {
-      state match {
-        case Collecting => {
-          log.info("{} hosts in active set.", active.size);
-          if (active.size >= bootThreshold) {
-            bootUp();
-          }
-        }
-        case Seeding => {
-          log.info("{} hosts in ready set.", ready.size);
-          if (ready.size >= bootThreshold) {
-            log.info("Finished seeding. Bootstrapping complete.");
-            initialAssignment match {
-              case Some(assignment) => {
-                trigger(Booted(assignment) -> boot);
-                state = Done;
-              }
-              case None => {
-                logger.error(s"No initial assignment received at bootThreshold. Ready nodes: $ready");
-                suicide();
-              }
-            }
-          }
-        }
-        case Done => {
-          suicide();
-        }
-      }
-    }
-  }
-
-  boot uponEvent {
-    case InitialAssignments(assignment) => handle {
-      initialAssignment = Some(assignment);
-      log.info("Seeding assignments..." + initialAssignment);
-      active foreach { node =>
-        trigger(PL_Send(node, Boot(assignment)) -> pLink);
-      }
-      ready += self;
-    }
-  }
 
   pLink uponEvent {
     case PL_Deliver(src, CheckIn) => handle {
-      active += src;
-    }
-    case PL_Deliver(src, Ready) => handle {
-      ready += src;
-    }
-  }
-
-  override def tearDown(): Unit = {
-    timeoutId match {
-      case Some(tid) => trigger(new CancelPeriodicTimeout(tid) -> timer);
-      case None      => // nothing to clean up
+      nodes += src
+      log.info("{} hosts in active set.", nodes.size);
+      if (nodes.size >= bootThreshold) {
+        log.info("Threshold reached.");
+        nodes.foreach {
+          n => trigger(PL_Send(n, Booted(nodes)) -> pLink)
+        }
+        suicide()
+      }
     }
   }
 
-  private def bootUp(): Unit = {
-    log.info("Threshold reached. Generating assignments...");
-    state = Seeding;
-    trigger(GetInitialAssignments(active.toSet) -> boot);
-  }
 }

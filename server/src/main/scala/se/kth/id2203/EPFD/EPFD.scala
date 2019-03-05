@@ -1,7 +1,10 @@
 package se.kth.id2203.EPFD
 
 //import se.kth.id2203.validation._
+import se.kth.id2203.PerfectLink
+import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking._
+import se.kth.id2203.nodeController.UpdateNodes
 import se.sics.kompics.network._
 import se.sics.kompics.sl.{Init, _}
 import se.sics.kompics.timer.{ScheduleTimeout, Timeout, Timer}
@@ -14,28 +17,27 @@ case class HeartbeatReply(seq: Int) extends KompicsEvent;
 case class HeartbeatRequest(seq: Int) extends KompicsEvent;
 
 //Define EPFD Implementation
-class EPFD(epfdInit: Init[EPFD]) extends ComponentDefinition {
+class EPFD() extends ComponentDefinition {
 
   //EPFD subscriptions
   val timer = requires[Timer];
-
-  // TODO We need a perfect link, is it a perfect link?
-  val net = requires[Network];
-  val epfd = provides[EventuallyPerfectFailureDetector];
+  val pLink = requires[PerfectLinkPort];
+  val fd = provides[EPFDPort];
 
   // EPDF component state and initialization
 
   //configuration parameters
-  val self = epfdInit match {case Init(s: NetAddress) => s};
+  val self = cfg.getValue[NetAddress]("id2203.project.address");
 
   // all other nodes?
-  val topology = cfg.getValue[List[NetAddress]]("epfd.simulation.topology");
-  val delta = 20;
+  var nodes = Set.empty[NetAddress]
+
+  val delta = 1000;
 
   //mutable state
   var period = delta;
-  var alive = Set(topology: _*);
-  var suspected = Set[NetAddress]();
+  var alive = nodes;
+  var suspected = Set.empty[NetAddress];
   var seqnum = 0;
 
   def startTimer(delay: Long): Unit = {
@@ -61,35 +63,44 @@ class EPFD(epfdInit: Init[EPFD]) extends ComponentDefinition {
 
       seqnum = seqnum + 1;
 
-      for (p <- topology) {
+      for (p <- nodes) {
 
         // if p is neither alive nor suspected
         if (!alive.contains(p) && !suspected.contains(p)) {
           /*SUSPECT P  */
           suspected = suspected + p;
-          trigger(Suspect(p) -> epfd);
+          log.debug("Suspecting " + p)
+          trigger(Suspect(p) -> fd);
 
         } else if (alive.contains(p) && suspected.contains(p)) {
           suspected = suspected - p;
-          trigger(Restore(p) -> epfd);
+          log.debug("Restored: " + p)
+          trigger(Restore(p) -> fd);
         }
-        trigger(NetMessage(self, p, HeartbeatRequest(seqnum)) -> net);
+        trigger(PerfectLink.PL_Send(p, HeartbeatRequest(seqnum)) -> pLink);
       }
-      alive = Set[NetAddress]();
+      alive = Set.empty[NetAddress];
       startTimer(period);
     }
   }
 
-  net uponEvent {
-    case NetMessage(header, HeartbeatRequest(seq)) => handle {
+  pLink uponEvent {
+    case PL_Deliver(_, UpdateNodes(n)) => handle{
+      if(n != nodes){
+        nodes = n
+        alive = nodes
+        suspected = Set.empty[NetAddress]
+      }
+    }
+    case PL_Deliver(src, HeartbeatRequest(seq)) => handle {
 
-      trigger(NetMessage(self, header.src, HeartbeatReply(seq)) -> net);
+      trigger(PL_Send(src, HeartbeatReply(seq)) -> pLink);
 
     }
-    case NetMessage(header, HeartbeatReply(seq)) => handle {
-      if (seq == seqnum || suspected.contains(header.src)){
-        alive = alive + header.src;
-        println("Process " + header.src + " is alive");
+    case PL_Deliver(src, HeartbeatReply(seq)) => handle {
+      if (seq == seqnum || suspected.contains(src)){
+        alive = alive + src;
+        //println("Process " + src + " is alive");
       }
     }
   }

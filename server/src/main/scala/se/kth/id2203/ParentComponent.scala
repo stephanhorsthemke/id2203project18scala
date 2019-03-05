@@ -24,13 +24,15 @@
 package se.kth.id2203;
 
 import se.kth.id2203.BEB.{Beb, BebPort}
-import se.kth.id2203.BEB.Beb.Replication
 import se.kth.id2203.DSM.{AtomicRegister, AtomicRegisterPort}
 import se.kth.id2203.PerfectLink._
+import se.kth.id2203.Paxos._
+import se.kth.id2203.EPFD._
 import se.kth.id2203.bootstrapping._
 import se.kth.id2203.kvstore.KVService
 import se.kth.id2203.networking.{NetAddress, NetAddressConverter, ScallopConverters}
 import se.kth.id2203.overlay._
+import se.kth.id2203.nodeController.NodeController
 import se.sics.kompics.sl._
 import se.sics.kompics.Init
 import se.sics.kompics.network.Network
@@ -46,11 +48,13 @@ class ParentComponent extends ComponentDefinition {
   val self:NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
 
   val beb = create(classOf[Beb], Init.NONE)
-
+  val fd = create(classOf[EPFD], Init.NONE)
+  val paxos = create(classOf[Paxos], Init.NONE)
   val pLink = create(classOf[PerfectLink], Init.NONE);
   val overlay = create(classOf[VAOverlayManager], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
   val ar = create(classOf[AtomicRegister], Init.NONE);
+  val rc = create(classOf[NodeController], Init.NONE);
   val boot = cfg.readValue[NetAddress]("id2203.project.bootstrap-address") match {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None    => create(classOf[BootstrapServer], Init.NONE); // start in server mode
@@ -60,26 +64,32 @@ class ParentComponent extends ComponentDefinition {
 
 
   {
-
-    logger
-
-    connect[Timer](timer -> boot);
-    connect[PerfectLinkPort](pLink -> boot);
-    // Overlay
-    connect(Bootstrapping)(boot -> overlay);
-    connect[PerfectLinkPort](pLink -> overlay);
-    // KV
-    connect(Routing)(overlay -> kv);
-    connect[PerfectLinkPort](pLink -> kv);
-    connect[AtomicRegisterPort](ar -> kv);
     //Perfect Link
     connect[Timer](timer -> pLink);
     connect[Network](net -> pLink);
     //BEB
     connect[PerfectLinkPort](pLink -> beb);
+    //FD
+    connect[PerfectLinkPort](pLink -> fd)
+    connect[Timer](timer -> fd)
+    //Paxos
+    connect[PerfectLinkPort](pLink -> paxos);
+    connect[BebPort](beb -> paxos);
     //AR
     connect[PerfectLinkPort](pLink -> ar)
     connect[BebPort](beb -> ar)
+    connect[PerfectLinkPort](pLink -> boot);
+    //ReplicationController
+    connect[PerfectLinkPort](pLink -> rc);
+    connect[PaxosPort](paxos -> rc)
+    connect[BebPort](beb -> rc)
+    connect[EPFDPort](fd -> rc)
+    // Overlay
+    connect[PerfectLinkPort](pLink -> overlay);
+    // KV
+    connect(Routing)(overlay -> kv);
+    connect[PerfectLinkPort](pLink -> kv);
+    connect[AtomicRegisterPort](ar -> kv);
 
   }
 }

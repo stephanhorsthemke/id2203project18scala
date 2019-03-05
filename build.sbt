@@ -65,6 +65,7 @@ lazy val deps =
     val log4jV          = "1.2.17"
     val slf4jV          = "1.7.25"
     val fastparseV      = "1.0.0"
+    val hasherV         = "1.2.0"
 
     val logback        = "ch.qos.logback"             %  "logback-classic"                 % logbackV
     val scalaLogging   = "com.typesafe.scala-logging" %% "scala-logging"                   % scalaLoggingV
@@ -81,6 +82,7 @@ lazy val deps =
     val log4j          = "log4j"                      %  "log4j"                           % log4jV
     val log4jSlf4j     = "org.slf4j"                  %  "slf4j-log4j12"                   % slf4jV
     val fastparse      = "com.lihaoyi"                %% "fastparse"                       % fastparseV
+    val hasher         = "com.roundeights"            %% "hasher"                          % hasherV
   }
 
 lazy val commonDependencies = Seq(
@@ -92,6 +94,7 @@ lazy val commonDependencies = Seq(
   deps.javaTimer,
   deps.commonUtils,
   deps.scallop,
+  deps.hasher,
   deps.scalatest  % "test"
 )
 

@@ -43,7 +43,7 @@ class KVService extends ComponentDefinition {
   var srcMap = scala.collection.mutable.Map.empty[UUID, (NetAddress, Op)];
 
 
-  //******* Hop.idandlers ******
+  //******* Handlers ******
   pLink uponEvent {
     case PL_Deliver(src, op :Op) if op.opName == "GET" => handle {
       log.info("Got operation GET! from: " + src);
@@ -68,7 +68,7 @@ class KVService extends ComponentDefinition {
     case AR_Read_Response(value: Option[Any], uuid: UUID) => handle {
 
       val srcOp = srcMap.remove(uuid);
-      if(srcOp != None){
+      if(srcOp.isDefined){
         val (src: NetAddress, op: Op) = srcOp.get
         if (value.nonEmpty) {
           log.info("Value found: " + value + " from: " + src)
@@ -84,9 +84,14 @@ class KVService extends ComponentDefinition {
     }
 
     case AR_Write_Response(uuid: UUID) => handle {
-      val (src: NetAddress, op: Op) = srcMap(uuid);
-      log.info("Value written")
-      trigger(PL_Send(src, op.response(OpCode.Ok)) -> pLink);
+      val srcOp = srcMap.remove(uuid);
+      if(srcOp.isDefined){
+        val (src: NetAddress, op: Op) = srcOp.get
+        log.info("Value written")
+        trigger(PL_Send(src, op.response(OpCode.Ok)) -> pLink);
+      }else{
+        log.debug("No entry for uuid, either duplicate or wrong message: " + uuid)
+      }
     }
 
   }

@@ -23,8 +23,10 @@
  */
 package se.kth.id2203.bootstrapping;
 
+
+import se.kth.id2203.networking.NetAddress
+
+import scala.collection.mutable
 import se.sics.kompics.KompicsEvent;
 
-case class Boot(assignment: NodeAssignment) extends KompicsEvent;
 case object CheckIn extends KompicsEvent;
-case object Ready extends KompicsEvent;
