@@ -34,7 +34,6 @@ import concurrent.duration._
 object ClientConsole {
   // Better build this statically. Has some overhead (building a lookup table).
   val simpleStr = P(CharsWhileIn(('0' to '9') ++ ('a' to 'z') ++ ('A' to 'Z'), 1).!);
-  val simpleStr2 = P(CharsWhileIn(('0' to '9') ++ ('a' to 'z') ++ ('A' to 'Z'), 1).!);
 
   val colouredLayout = new ColoredPatternLayout("%d{[HH:mm:ss,SSS]} %-5p {%c{1}} %m%n");
 }

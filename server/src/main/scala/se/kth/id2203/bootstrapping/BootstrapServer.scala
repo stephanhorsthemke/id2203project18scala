@@ -28,7 +28,7 @@ import java.util.UUID
 import se.kth.id2203.PerfectLink
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking._
-import se.kth.id2203.replicationController.UpdateNodes
+import se.kth.id2203.nodeController.UpdateNodes
 import se.sics.kompics.sl._
 import se.sics.kompics.Start
 

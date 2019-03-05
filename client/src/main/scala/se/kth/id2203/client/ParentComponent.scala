@@ -40,8 +40,6 @@ class ParentComponent extends ComponentDefinition {
   val net = create(classOf[NettyNetwork], new NettyInit(self));
   val client = create(classOf[ClientService], Init.NONE);
 
-
-  // TODO how to initialize
   val pLink = create(classOf[PerfectLink], Init.NONE)
 
   connect[Timer](timer -> client);

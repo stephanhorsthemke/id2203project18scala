@@ -35,7 +35,7 @@ import se.sics.kompics.sl._
 import se.sics.kompics.network.Network
 import se.sics.kompics.timer.Timer
 import se.kth.id2203.kvstore.{Op, OpCode, OpResponse}
-import se.kth.id2203.replicationController.UpdateNodes
+import se.kth.id2203.nodeController.UpdateNodes
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
@@ -77,6 +77,7 @@ class VAOverlayManager extends ComponentDefinition {
 
     // forwards a message to responsible node for the key
     case PL_Deliver(src, RouteMsg(key,op:Op)) => handle {
+      log.debug("Received RouteMessage")
       srcMap += (op.id -> src);
       // gets responsible node
       val nodes = lut.get.lookup(key);

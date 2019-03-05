@@ -1,4 +1,4 @@
-package se.kth.id2203.replicationController
+package se.kth.id2203.nodeController
 
 import javax.swing.plaf.BorderUIResource.BevelBorderUIResource
 import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
@@ -34,7 +34,7 @@ import scala.collection.mutable
   */
 
 // TODO: generate the Lookuptable anew in the OverlayManager -> Is the generation deterministic with a specific set of nodes?
-class ReplicationController extends ComponentDefinition{
+class NodeController extends ComponentDefinition{
 
   val pLink = requires[PerfectLinkPort]
   val beb = requires[BebPort]
