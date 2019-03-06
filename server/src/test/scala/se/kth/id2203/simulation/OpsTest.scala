@@ -58,8 +58,8 @@ class OpsTest extends FlatSpec with Matchers {
 
 
 
-  // Sends 10 PUTs waits and GETs every PUT once
-  "Simple Operation" should "Ok" in { // well of course eventually they should be implemented^^
+  // Sends 10 PUTs waits, sends CASs to increment them by 4 and then GETs all values
+  "Operations Testing" should "Ok" in { // well of course eventually they should be implemented^^
     val seed = 123l;
     JSimulationScenario.setSeed(seed);
     val simpleBootScenario = SimpleScenario.scenario(3);
@@ -68,6 +68,7 @@ class OpsTest extends FlatSpec with Matchers {
     simpleBootScenario.simulate(classOf[LauncherComp]);
     for (i <- 0 to nMessages) {
       SimulationResult.get[String](s"PUT$i") should be (Some("Ok"));
+      SimulationResult.get[String](s"CAS$i") should be (Some("Ok"));
       SimulationResult.get[String](s"GET$i") should be (Some("Ok"));
     }
   }
