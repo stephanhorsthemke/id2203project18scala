@@ -1,6 +1,6 @@
 package se.kth.id2203.DSM
 
-import se.kth.id2203.BEB.Beb.Replication
+import se.kth.id2203.BEB.Beb._
 import se.kth.id2203.BEB._
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking.NetAddress
@@ -20,7 +20,11 @@ class AtomicRegister() extends ComponentDefinition {
   val pLink: PositivePort[PerfectLinkPort] = requires[PerfectLinkPort];
   val beb: PositivePort[BebPort] = requires[BebPort];
 
-  var n: Int = 3  // size of partition
+  // size of  running partition
+  var n: Int = 3
+  // size of building/new partition
+  var nBuild :Int = 3
+
   val self: NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
   val rank: Int = self.getPort();
 
@@ -29,12 +33,10 @@ class AtomicRegister() extends ComponentDefinition {
   //handlers
 
   nnar uponEvent {
-    case AR_Read_Request(uuid, key) => handle {
+    case AR_Read_Request(uuid, key, group) => handle {
       if (store.get(key).isEmpty) {
         store(key) = new StoreObject;
       }
-
-
       store(key).rid += 1;
       store(key).acks = 0;
       store(key).readlist = Map.empty;
@@ -42,10 +44,10 @@ class AtomicRegister() extends ComponentDefinition {
       store(key).idMap += (store(key).rid -> uuid);
 
       // Broadcast read request to all
-      trigger(BEB_Broadcast(READ(store(key).rid, key), Replication) -> beb);
+      trigger(BEB_Broadcast(READ(store(key).rid, key), group) -> beb);
     }
 
-    case AR_Write_Request(wval, key, uuid) => handle {
+    case AR_Write_Request(wval, key, uuid, group) => handle {
       if (store.get(key).isEmpty) {
         store(key) = new StoreObject;
       }
@@ -57,20 +59,20 @@ class AtomicRegister() extends ComponentDefinition {
       store(key).idMap += (store(key).rid -> uuid);
 
       // Broadcast write request to all
-      trigger(BEB_Broadcast(READ(store(key).rid, key), Replication) -> beb);
+      trigger(BEB_Broadcast(READ(store(key).rid, key), group) -> beb);
     }
   }
 
   beb uponEvent {
     //Broadcasted READ -> respond with local value and ts
-    case BEB_Deliver(src, READ(readID, key), Replication) => handle {
+    case BEB_Deliver(src, READ(readID, key), group) => handle {
       if (store.get(key).isEmpty) {
         store(key) = new StoreObject;
       }
-      trigger(PL_Send(src, VALUE(readID, key, store(key).ts, store(key).wr, store(key).value)) -> pLink);
+      trigger(PL_Send(src, VALUE(readID, key, store(key).ts, store(key).wr, store(key).value, group)) -> pLink);
     }
 
-    case BEB_Deliver(src, w: WRITE, Replication) => handle {
+    case BEB_Deliver(src, w: WRITE, _) => handle {
       if ((w.ts, w.wr) > (store(w.key).ts, store(w.key).wr)) {
         store(w.key).ts = w.ts;
         store(w.key).wr = w.wr;
@@ -102,7 +104,7 @@ class AtomicRegister() extends ComponentDefinition {
             maxts = maxts + 1;
             bcastval = store(v.key).writeval;
           }
-          trigger(BEB_Broadcast(WRITE(store(v.key).rid, v.key, maxts, rr, bcastval), Replication) -> beb);
+          trigger(BEB_Broadcast(WRITE(store(v.key).rid, v.key, maxts, rr, bcastval), v.group) -> beb);
 
         }
       }
@@ -129,8 +131,12 @@ class AtomicRegister() extends ComponentDefinition {
     }
 
     // sets the size of the partition
-    case PL_Deliver(this.self, BEB_Topology(addr: Set[NetAddress], Replication)) => handle {
-      n = addr.size;
+    case PL_Deliver(this.self, BEB_Topology(addr: Set[NetAddress], group)) => handle {
+      if (group == Replication){
+        n = addr.size;
+      } else if(group == Build){
+        nBuild = addr.size;
+      }
     }
   }
 }
