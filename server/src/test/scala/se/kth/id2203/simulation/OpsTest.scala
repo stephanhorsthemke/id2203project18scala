@@ -85,6 +85,7 @@ class OpsTest extends FlatSpec with Matchers {
     simpleBootScenario.simulate(classOf[LauncherComp]);
     for (i <- 0 to nMessages) {
       SimulationResult.get[String](s"PUT$i") should be (Some("Ok"));
+      SimulationResult.get[String](s"CAS$i") should be (Some("Ok"));
       SimulationResult.get[String](s"GET$i") should be (Some("Ok"));
     }
     // Checks only possible with strings!! took me only 2 hours....
