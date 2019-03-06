@@ -70,6 +70,10 @@ object LookupTable {
   //takes the node addresses and creates lookup table
   def generate(nodes: Set[NetAddress]): LookupTable = {
 
+    // todo: move k to reference.conf? currently cfg is not accessible from here
+    val k: Int = 3;                                         // min partition size
+    assert(nodes.size >= k, "Lookup table cannot be generated for less than k=" + k + " nodes");
+
     // define list of all nodes ordered by their hash
     val order = Ordering.by { x: (String, NetAddress) => x._1 };
     var sortedNodes: SortedSet[(String, NetAddress)] = SortedSet.empty(order);
@@ -79,14 +83,11 @@ object LookupTable {
       (getHash(x.toString()), x);
     });
 
-    // todo: move k to reference.conf? currently cfg is not accessible from here
-    val k: Int = 3;                                         // min partition size
-    val n: Int = nodes.size;                                // node count
-    val p: Int = Math.floor(n / k).toInt;                   // partition count
-    val lon: Int = n - p * k;                               // left over nodes
-    val pn: Int = Math.ceil(lon/p).toInt;                   // plus nodes
-    val pnc: Int = if (lon > 0 && pn > 0) lon / pn else 0;  // plus nodes count
-
+    val n: Int = nodes.size;                                      // node count
+    val p: Int = Math.floor(n.toDouble / k.toDouble).toInt;       // partition count
+    val lon: Int = n - p * k;                                     // left over nodes
+    val pn: Int = Math.ceil(lon.toDouble / p.toDouble).toInt;     // plus nodes
+    val pnc: Int = if (lon > 0 && pn > 0) lon / pn else 0;        // plus nodes count
 
     val lut = new LookupTable();
 
@@ -96,7 +97,7 @@ object LookupTable {
       var hash = "";
 
       // go through nodes in this partition
-      val x = if (i <= pnc) k+pn else k;
+      val x = if (i < pnc) k+pn else k;
       for(j <- 0 until x) {
         val cur = sortedNodes.head;
         sortedNodes = sortedNodes.tail;
@@ -110,7 +111,7 @@ object LookupTable {
 
       lut.partitions ++= (hash -> partitionNodes);
     }
-    assert(sortedNodes.isEmpty);
+    assert(sortedNodes.isEmpty, "not all nodes were sorted into lookup table");
 
     lut
   }
