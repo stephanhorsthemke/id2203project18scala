@@ -59,7 +59,7 @@ class NodeController extends ComponentDefinition{
         newNodes += src
         trigger(C_Propose(newNodes) -> paxos)
         trigger(PL_Send(src, Booted(newNodes)) -> pLink)
-        log.debug("Send updatesNodes(" + newNodes.toSet + " to: " + src)
+        log.debug("Send updateNodes(" + newNodes.toSet + " to: " + src)
       }else{
         log.debug("Deleting duplicate checkin")
       }
@@ -79,8 +79,9 @@ class NodeController extends ComponentDefinition{
       trigger(PL_Send(self, UpdateNodes(nodes.toSet)) -> pLink)
     }
 
-      case PL_Deliver(src, CheckIn) if booted =>  handle {
-        newNode(src)
+    case PL_Deliver(src, CheckIn) if booted =>  handle {
+      log.debug("CHECKIN processing..")
+      newNode(src)
     }
   }
 

@@ -26,6 +26,7 @@ package se.kth.id2203.simulation;
 import java.util.UUID
 
 import se.kth.id2203.PerfectLink._
+import se.kth.id2203.bootstrapping.{Booted, CheckIn}
 import se.kth.id2203.kvstore._
 import se.kth.id2203.networking._
 import se.kth.id2203.overlay.RouteMsg
@@ -128,10 +129,11 @@ class ScenarioClient extends ComponentDefinition {
         val routeMsg = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
         trigger(PL_Send(server, routeMsg) -> pLink);
         pending += (op.id -> s"GET$i");
-        logger.debug("Server: " + server);
         logger.info("Sending {}", op);
         SimulationResult += (s"GET$i" -> "Sent");
+
       }
+      trigger(PL_Send(server, CheckIn) -> pLink);
     }
   }
 
@@ -142,6 +144,13 @@ class ScenarioClient extends ComponentDefinition {
         case Some(x) => SimulationResult += (x -> status.toString());
         case None      => logger.warn("ID $id was not pending! Ignoring response.");
       }
+    }
+
+    case PL_Deliver(_, b @ Booted(_)) => handle {
+      val numberOfNodes = b.nodes.size - 1
+      log.debug("Got Node number: " + numberOfNodes)
+      SimulationResult += (s"NN" -> numberOfNodes.toString);
+      log.debug("result: " + SimulationResult.get[String](s"NN"))
     }
   }
 }

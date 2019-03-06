@@ -59,7 +59,7 @@ class OpsTest extends FlatSpec with Matchers {
 
 
   // Sends 10 PUTs waits, sends CASs to increment them by 4 and then GETs all values
-  "Operations Testing" should "Ok" in { // well of course eventually they should be implemented^^
+  "Operations Testing" should "Ok" in {
     val seed = 123l;
     JSimulationScenario.setSeed(seed);
     val simpleBootScenario = SimpleScenario.scenario(3);
@@ -71,6 +71,24 @@ class OpsTest extends FlatSpec with Matchers {
       SimulationResult.get[String](s"CAS$i") should be (Some("Ok"));
       SimulationResult.get[String](s"GET$i") should be (Some("Ok"));
     }
+  }
+
+  "Adding an arbitrary number of Nodes (>3) " should "be possible" in{
+    val seed = 123l;
+    JSimulationScenario.setSeed(seed);
+    val r = scala.util.Random
+    //val serverNumber = r.nextInt(20)
+    val serverNumber = 5;
+    val simpleBootScenario = SimpleScenario.nNodesScenario(serverNumber);
+    val res = SimulationResultSingleton.getInstance();
+    SimulationResult += ( "NN" -> 0);
+    simpleBootScenario.simulate(classOf[LauncherComp]);
+    for (i <- 0 to nMessages) {
+      SimulationResult.get[String](s"PUT$i") should be (Some("Ok"));
+      SimulationResult.get[String](s"GET$i") should be (Some("Ok"));
+    }
+    // Checks only possible with strings!! took me only 2 hours....
+    SimulationResult.get[String]("NN") should be (Some(serverNumber.toString))
   }
 
 }
@@ -98,7 +116,7 @@ object SimpleScenario {
 
   private def isBootstrap(self: Int): Boolean = self == 1;
 
-  val startServerOp = Op { (self: Integer) =>
+  val startBootOp = Op { (self: Integer) =>
 
     val selfAddr = intToServerAddress(self)
     val conf = if (isBootstrap(self)) {
@@ -112,6 +130,16 @@ object SimpleScenario {
     StartNode(selfAddr, Init.none[ParentComponent], conf);
   };
 
+  val startServerOp = Op { (self: Integer) =>
+
+    val selfAddr = intToServerAddress(self+3)
+    val conf =
+      Map(
+        "id2203.project.address" -> selfAddr,
+        "id2203.project.bootstrap-address" -> intToServerAddress(1))
+    StartNode(selfAddr, Init.none[ParentComponent], conf);
+  };
+
   val startClientOp = Op { (self: Integer) =>
     val selfAddr = intToClientAddress(self)
     val conf = Map(
@@ -120,14 +148,38 @@ object SimpleScenario {
     StartNode(selfAddr, Init.none[ScenarioParent], conf);
   };
 
+  val startNodesOp = Op { (self:Integer) =>
+    val selfAddr = intToClientAddress(self)
+    val conf = Map(
+      "id2203.project.address" -> selfAddr,
+      "id2203.project.bootstrap-address" -> intToServerAddress(1));
+    StartNode(intToClientAddress(self), Init.none[NodesTestParent], conf)
+  }
+
+
+
   def scenario(servers: Int): JSimulationScenario = {
 
-    val startCluster = raise(servers, startServerOp, 1.toN).arrival(constant(1.second));
+    val startCluster = raise(servers, startBootOp, 1.toN).arrival(constant(1.second));
     val startClients = raise(1, startClientOp, 1.toN).arrival(constant(1.second));
 
     startCluster andThen
       10.seconds afterStart startClients andThen
       100.seconds afterTermination Terminate
+  }
+
+  def nNodesScenario(servers: Int): JSimulationScenario = {
+
+    val startBoot = raise(3, startBootOp, 1.toN).arrival(constant(1.second));
+    val startCluster = raise(servers-3, startServerOp, 1.toN).arrival(constant(1.second));
+    val startClients = raise(1, startClientOp, 1.toN).arrival(constant(1.second));
+    //val startNodeTest = raise(1, startNodesOp, 1.toN).arrival(constant(1.second))
+
+    startBoot andThen
+      20.seconds afterStart startCluster andThen
+      100.seconds afterStart startClients andThen
+      //150.seconds afterTermination startNodeTest andThen
+      150.seconds afterTermination Terminate
   }
 
 }
