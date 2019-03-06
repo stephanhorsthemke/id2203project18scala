@@ -1,6 +1,6 @@
 package se.kth.id2203.BEB;
 
-import se.kth.id2203.BEB.Beb.{BebType, Replication}
+import se.kth.id2203.BEB.Beb.{BebType, Build, Global, Replication}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking.{NetAddress, NetMessage}
 import se.sics.kompics.sl._
@@ -10,6 +10,7 @@ object Beb {
   sealed trait BebType;
   case object Replication extends BebType;
   case object Global extends BebType;
+  case object Build extends BebType;
 }
 
 
@@ -23,6 +24,7 @@ class Beb() extends ComponentDefinition {
   val beb = provides[BebPort];
   var topologyRepl = Set.empty[NetAddress];
   var topologyGlobal = Set.empty[NetAddress];
+  var topologyBuild = Set.empty[NetAddress];
 
   //handlers
   beb uponEvent {
@@ -52,10 +54,12 @@ class Beb() extends ComponentDefinition {
       if (sc == Replication) {
         topologyRepl = addr;
         log.info("Setting new BEB Replication topology: " + addr)
-      } else {
+      } else if (sc == Global) {
         topologyGlobal = addr;
         log.info("Setting new BEB Global topology: " + addr)
-
+      } else if (sc == Build) {
+        topologyBuild = addr;
+        log.info("Setting new BEB Build topology: " + addr)
       }
     }
   }

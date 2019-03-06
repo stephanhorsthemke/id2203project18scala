@@ -85,7 +85,7 @@ class EPFD() extends ComponentDefinition {
   }
 
   pLink uponEvent {
-    case PL_Deliver(_, UpdateNodes(n)) => handle{
+    case PL_Deliver(_, UpdateNodes(n, _)) => handle{
       if(n != nodes){
         nodes = n
         alive = nodes

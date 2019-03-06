@@ -25,21 +25,18 @@ package se.kth.id2203.overlay;
 
 import java.util.UUID
 
-import se.kth.id2203.BEB.Beb.{Global, Replication}
-import se.kth.id2203.BEB.{BEB_Broadcast, BEB_Topology, BebPort}
+import se.kth.id2203.BEB.Beb.{Build, Global, Replication}
+import se.kth.id2203.BEB.{BEB_Topology, BebPort}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
-import se.kth.id2203.bootstrapping._
 import se.kth.id2203.kvstore.OpCode.OpCode
+import se.kth.id2203.kvstore.{Op, OpResponse}
 import se.kth.id2203.networking._
-import se.sics.kompics.sl._
-import se.sics.kompics.network.Network
-import se.sics.kompics.timer.Timer
-import se.kth.id2203.kvstore.{Op, OpCode, OpResponse}
+import se.kth.id2203.nodeController.NodeUpdate.{Boot, NodeUpdate, Update}
 import se.kth.id2203.nodeController.UpdateNodes
+import se.sics.kompics.sl._
+import se.sics.kompics.timer.Timer
 
-import scala.collection.immutable.HashSet
-import scala.collection.mutable
-import util.Random;
+import scala.util.Random;
 
 /**
  * The V(ery)A(dvanced)OverlayManager.
@@ -61,17 +58,40 @@ class VAOverlayManager extends ComponentDefinition {
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
+  private var buildLut: Option[LookupTable] = None;
   var srcMap = scala.collection.mutable.Map.empty[UUID, NetAddress]
 
 
   //******* Handlers ******
   pLink uponEvent {
-    case PL_Deliver(_, UpdateNodes(n: Set[NetAddress])) => handle{
+    case PL_Deliver(_, UpdateNodes(n: Set[NetAddress], event: NodeUpdate)) => handle{
       log.debug("Updated Nodes: " + n)
-      lut = Some(LookupTable.generate(n));
-      trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink)
-      trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink)
-      log.info("Generating new LookupTable..." + lut.getOrElse(Set.empty).toString());
+
+      if (event == Boot) {
+        lut = Some(LookupTable.generate(n));
+
+        trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink);
+        trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink);
+
+        log.info("Fresh LookupTable..." + lut.getOrElse(Set.empty).toString);
+
+      } else if (event == Update) {
+        // TODO add DSM reconfig here
+        assert(lut.isDefined, "Update was triggered before Boot was completed");
+
+        // create new lut
+        buildLut = Some(LookupTable.generate(n));
+
+        trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink);
+        trigger(PL_Send(self, BEB_Topology(buildLut.get.getNodes(self), Build)) -> pLink);
+
+        if (lut.get.isFirst(self)) {
+          // send all values from oldRepl to newRepl
+
+          // send globalBcast that all values were sent
+
+        }
+      }
     }
 
 
@@ -83,7 +103,7 @@ class VAOverlayManager extends ComponentDefinition {
       val nodes = lut.get.lookup(key);
       log.info(s"Choose from $nodes");
       // throws assertionException when nodes is empty
-      assert(!nodes.isEmpty);
+      assert(nodes.nonEmpty);
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
       log.info(s"Forwarding message for key $key to $target with $op");
@@ -112,17 +132,16 @@ class VAOverlayManager extends ComponentDefinition {
           val size = l.getNodes.size;
           trigger (PL_Send(src, msg.ack(size)) -> pLink);
         }
-        case None => log.info(s"Rejecting connection request from ${src}, as system is not ready, yet.");
+        case None => log.info(s"Rejecting connection request from $src, as system is not ready, yet.");
       }
     }
   }
 
   route uponEvent {
-    // TODO DO we even need this
     // sends message to responsible node for the key
     case RouteMsg(key, msg) => handle {
       val nodes = lut.get.lookup(key);
-      assert(!nodes.isEmpty);
+      assert(nodes.nonEmpty);
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
       log.info(s"ROUTING MESSAGE for key $key to $target");

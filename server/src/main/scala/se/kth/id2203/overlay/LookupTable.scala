@@ -34,7 +34,7 @@ import com.roundeights.hasher.Hasher
 class LookupTable extends NodeAssignment with Serializable {
 
 
-  val partitions = TreeSetMultiMap.empty[String, NetAddress];
+  val partitions: TreeSetMultiMap[String, NetAddress] = TreeSetMultiMap.empty[String, NetAddress];
 
   // Returns the network address of nodes in one partition which are responsible for key
   def lookup(key: String): Iterable[NetAddress] = {
@@ -43,7 +43,7 @@ class LookupTable extends NodeAssignment with Serializable {
       case Some(k) => k
       case None    => partitions.lastKey
     }
-    return partitions(partition);
+    partitions(partition);
   }
 
   // Gets the nodes of all partitions
@@ -57,26 +57,27 @@ class LookupTable extends NodeAssignment with Serializable {
       case (acc, kv) => acc ++ kv._2
     }
 
-  override def toString(): String = {
+  def isFirst(node: NetAddress): Boolean = {
+    LookupTable.getSortedSet(getNodes(node)).head._2.equals(node)
+  }
+
+  def getPartitionBoundaries(node: NetAddress): (String, String) = {
+
+  }
+
+  override def toString: String = {
     val sb = new StringBuilder();
     sb.append("LookupTable(\n");
     sb.append(partitions.mkString(","));
     sb.append(")");
-    return sb.toString();
+    sb.toString();
   }
 }
 
 object LookupTable {
   //takes the node addresses and creates lookup table
   def generate(nodes: Set[NetAddress]): LookupTable = {
-    // define list of all nodes ordered by their hash
-    val order = Ordering.by { x: (String, NetAddress) => x._1 };
-    var sortedNodes: SortedSet[(String, NetAddress)] = SortedSet.empty(order);
-
-    // fill list of all nodes by generating hashes
-    sortedNodes = sortedNodes ++ nodes.map(x => {
-      (getHash(x.toString()), x);
-    });
+    var sortedNodes: SortedSet[(String, NetAddress)] = getSortedSet(nodes);
 
     // todo: move k to reference.conf? currently cfg is not accessible from here
     val k: Int = 3;             // min partition size
@@ -122,5 +123,18 @@ object LookupTable {
 
   def getHash(key: String): String = {
     Hasher(key).sha512;
+  }
+
+  // returns list of all nodes ordered by their hash
+  def getSortedSet(nodes: Set[NetAddress]): SortedSet[(String, NetAddress)] = {
+    val order = Ordering.by { x: (String, NetAddress) => x._1 };
+    var sortedNodes: SortedSet[(String, NetAddress)] = SortedSet.empty(order);
+
+    // fill list of all nodes by generating hashes
+    sortedNodes = sortedNodes ++ nodes.map(x => {
+      (getHash(x.toString()), x);
+    });
+
+    sortedNodes
   }
 }
