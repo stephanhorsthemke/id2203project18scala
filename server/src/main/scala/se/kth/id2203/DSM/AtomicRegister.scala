@@ -34,7 +34,6 @@ class AtomicRegister() extends ComponentDefinition {
         store(key) = new StoreObject;
       }
 
-
       store(key).rid += 1;
       store(key).acks = 0;
       store(key).readlist = Map.empty;
@@ -54,6 +53,22 @@ class AtomicRegister() extends ComponentDefinition {
       store(key).acks = 0;
       store(key).readlist = Map.empty;
       store(key).writeval = Some(wval);
+      store(key).idMap += (store(key).rid -> uuid);
+
+      // Broadcast write request to all
+      trigger(BEB_Broadcast(READ(store(key).rid, key), Replication) -> beb);
+    }
+
+    case AR_CAS_Request(cval, wval, key, uuid) => handle {
+      if (store.get(key).isEmpty) {
+        store(key) = new StoreObject;
+      }
+
+      store(key).rid += 1;
+      store(key).acks = 0;
+      store(key).readlist = Map.empty;
+      store(key).writeval = Some(wval);
+      store(key).compareval = Some(cval);
       store(key).idMap += (store(key).rid -> uuid);
 
       // Broadcast write request to all
@@ -95,7 +110,9 @@ class AtomicRegister() extends ComponentDefinition {
           store(v.key).readlist = Map.empty;
 
           var bcastval: Option[Any] = None;
-          if (store(v.key).reading) {
+          if (store(v.key).reading // if read request
+            || (store(v.key).compareval.isDefined && !store(v.key).readval.get.equals(store(v.key).compareval.get))) { // if cas request and not equal
+
             bcastval = store(v.key).readval;
           } else {
             rr = rank;
@@ -121,6 +138,9 @@ class AtomicRegister() extends ComponentDefinition {
           if (store(v.key).reading) {
             store(v.key).reading = false;
             trigger(AR_Read_Response(store(v.key).readval, uuid) -> nnar);
+          } else if (store(v.key).compareval.isDefined) {
+            store(v.key).compareval = None;
+            trigger(AR_CAS_Response(store(v.key).value, uuid) -> nnar);
           } else {
             trigger(AR_Write_Response(uuid) -> nnar)
           }
