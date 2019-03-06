@@ -44,12 +44,12 @@ class ClientConsole(val service: ClientService) extends CommandConsole with Pars
   override def layout: Layout = colouredLayout;
   override def onInterrupt(): Unit = exit();
 
-  val get = parsed(P("op" ~ " " ~ simpleStr ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "op <op> <key> <value>", descr = "Executes an <op> at <key>. In case of PUT it takes <value>") { parsed =>
-    println(s"Op with $parsed");
+  val get = parsed(P("GET" ~ " " ~ simpleStr), usage = "GET <key>", descr = "Executes an <op> at <key>. In case of PUT it takes <value>") { parsed =>
+    println(s"GET with $parsed");
 
-    var (op, key ,value) = parsed
+    var (key) = parsed
 
-    val fr = if (key == "GET") service.op(op, key) else service.op(op, key, value);
+    val fr = service.op("GET", key);
     out.println("Operation sent! Awaiting response...");
     try {
       val r = Await.result(fr, 25.seconds);
@@ -59,7 +59,22 @@ class ClientConsole(val service: ClientService) extends CommandConsole with Pars
     }
   };
 
-  val cas = parsed(P("CAS" ~ " " ~ simpleStr ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "cas <key> <value> <refValue>", descr = "Executes an CAS at <key>. If current value matches <refValue> will be swapped with <value>") { parsed =>
+  val put = parsed(P("PUT" ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "PUT <key> <value>", descr = "Executes an <op> at <key>. In case of PUT it takes <value>") { parsed =>
+    println(s"PUT with $parsed");
+
+    var (key ,value) = parsed
+
+    val fr = service.op("PUT", key, value);
+    out.println("Operation sent! Awaiting response...");
+    try {
+      val r = Await.result(fr, 25.seconds);
+      out.println("Operation complete! Response was: " + r.value + " Status: " + r.status);
+    } catch {
+      case e: Throwable => logger.error("Error during op.", e);
+    }
+  };
+
+  val cas = parsed(P("CAS" ~ " " ~ simpleStr ~ " " ~ simpleStr ~ " " ~ simpleStr), usage = "CAS <key> <value> <refValue>", descr = "Executes an CAS at <key>. If current value matches <refValue> will be swapped with <value>") { parsed =>
     println(s"CAS with $parsed");
 
     var (key, value, refValue) = parsed
