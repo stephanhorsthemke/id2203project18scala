@@ -13,6 +13,7 @@ class StoreObject {
   var rid = 0;
   var readlist: Map[NetAddress, (Int, Int, Option[Any])] = Map.empty
   var reading = false;
+  var compareval: Option[Any] = None;
 
   var idMap: Map[Int, UUID] = Map.empty;
 }
