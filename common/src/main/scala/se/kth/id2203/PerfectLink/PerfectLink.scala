@@ -37,7 +37,7 @@ class PerfectLink() extends ComponentDefinition {
   timer uponEvent {
     case Resend(delay) => handle {
       if(!sent.isEmpty)
-      //log.debug("timeout, resending: " + sent)
+      log.debug("timeout, resending: " + sent)
       sent.keys.foreach {
         i =>
           var netmsg = sent(i)
