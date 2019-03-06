@@ -138,11 +138,16 @@ class ScenarioClient extends ComponentDefinition {
   }
 
   pLink uponEvent {
-    case PL_Deliver(src, or @ OpResponse(id, status, value)) => handle {
+    case PL_Deliver(src, or @ OpResponse(id, status, value: Option[Any])) => handle {
       logger.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
-        case Some(x) => SimulationResult += (x -> status.toString());
-        case None      => logger.warn("ID $id was not pending! Ignoring response.");
+        case Some(x) =>
+            if (!value.nonEmpty){
+              SimulationResult += (x -> status.toString())
+            }else{
+              SimulationResult += (x -> value.get.toString);
+            }
+        case None =>  logger.warn("ID $id was not pending! Ignoring response.");
       }
     }
 
