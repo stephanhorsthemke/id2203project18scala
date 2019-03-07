@@ -51,10 +51,10 @@ class ParentComponent extends ComponentDefinition {
   val fd = create(classOf[EPFD], Init.NONE)
   val paxos = create(classOf[Paxos], Init.NONE)
   val pLink = create(classOf[PerfectLink], Init.NONE);
-  val overlay = create(classOf[VAOverlayManager], Init.NONE);
+  val rc = create(classOf[ReplicationController], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
   val ar = create(classOf[AtomicRegister], Init.NONE);
-  val rc = create(classOf[NodeController], Init.NONE);
+  val nc = create(classOf[NodeController], Init.NONE);
   val boot = cfg.readValue[NetAddress]("id2203.project.bootstrap-address") match {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None    => create(classOf[BootstrapServer], Init.NONE); // start in server mode
@@ -79,15 +79,15 @@ class ParentComponent extends ComponentDefinition {
     connect[PerfectLinkPort](pLink -> ar)
     connect[BebPort](beb -> ar)
     connect[PerfectLinkPort](pLink -> boot);
-    //ReplicationController
+    //NodeController
+    connect[PerfectLinkPort](pLink -> nc);
+    connect[PaxosPort](paxos -> nc)
+    connect[BebPort](beb -> nc)
+    connect[EPFDPort](fd -> nc)
+    // ReplicationController
     connect[PerfectLinkPort](pLink -> rc);
-    connect[PaxosPort](paxos -> rc)
-    connect[BebPort](beb -> rc)
-    connect[EPFDPort](fd -> rc)
-    // Overlay
-    connect[PerfectLinkPort](pLink -> overlay);
     // KV
-    connect(Routing)(overlay -> kv);
+    connect(Routing)(rc -> kv);
     connect[PerfectLinkPort](pLink -> kv);
     connect[AtomicRegisterPort](ar -> kv);
 

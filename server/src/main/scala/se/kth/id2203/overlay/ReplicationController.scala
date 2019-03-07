@@ -48,7 +48,7 @@ import scala.util.Random;
  * <p>
  * @author Lars Kroll <lkroll@kth.se>
  */
-class VAOverlayManager extends ComponentDefinition {
+class ReplicationController extends ComponentDefinition {
 
   //******* Ports ******
   val route = provides(Routing);

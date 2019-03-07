@@ -38,8 +38,6 @@ object NodeUpdate {
   case object Boot extends NodeUpdate;
   case object Update extends NodeUpdate;
 }
-
-// TODO: generate the Lookuptable anew in the OverlayManager -> Is the generation deterministic with a specific set of nodes?
 class NodeController extends ComponentDefinition{
 
   val pLink = requires[PerfectLinkPort]

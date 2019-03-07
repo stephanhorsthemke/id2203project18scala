@@ -21,7 +21,7 @@ class AtomicRegister() extends ComponentDefinition {
   val beb: PositivePort[BebPort] = requires[BebPort];
 
   // size of  running partition
-  var n: Int = 3
+  var nRepl: Int = 3
   // size of building/new partition
   var nBuild :Int = 3
 
@@ -89,6 +89,7 @@ class AtomicRegister() extends ComponentDefinition {
       if (v.rid == store(v.key).rid) {
         store(v.key).readlist += (src -> (v.rid, v.ts, v.value));
 
+        val n:Int = if (v.group == Replication) nRepl else nBuild
         if (store(v.key).readlist.size > n / 2) {
           val highest = store(v.key).readlist.valuesIterator.reduceLeft { (a, x) => if (a._2 > x._2) a else x };
           var maxts = highest._1;
@@ -112,12 +113,16 @@ class AtomicRegister() extends ComponentDefinition {
 
     // an ACK from src arrives
     case PL_Deliver(src, v: ACK) => handle {
+
+
       //if register id is the current one (it is not an old ACK)
       if (v.rid == store(v.key).rid) {
         val uuid = store(v.key).idMap(store(v.key).rid);
 
         // increment ack
         store(v.key).acks += 1;
+
+        val n:Int = if (v.group == Replication) nRepl else nBuild
         if (store(v.key).acks > n / 2) {
           store(v.key).acks = 0;
           if (store(v.key).reading) {
@@ -133,7 +138,7 @@ class AtomicRegister() extends ComponentDefinition {
     // sets the size of the partition
     case PL_Deliver(this.self, BEB_Topology(addr: Set[NetAddress], group)) => handle {
       if (group == Replication){
-        n = addr.size;
+        nRepl = addr.size;
       } else if(group == Build){
         nBuild = addr.size;
       }
