@@ -62,7 +62,20 @@ class LookupTable extends NodeAssignment with Serializable {
   }
 
   def getPartitionBoundaries(node: NetAddress): (String, String) = {
+    // lower boundary is inclusive, upper boundary is exclusive!
+    val nodeHash = LookupTable.getHash(node.toString());
 
+    val lower = partitions.floor(nodeHash) match {
+      case Some(k) => k
+      case None    => partitions.lastKey
+    }
+
+    val upper = partitions.ceil(nodeHash) match {
+      case Some(k) => k
+      case None    => partitions.firstKey
+    }
+
+    (lower, upper)
   }
 
   override def toString: String = {

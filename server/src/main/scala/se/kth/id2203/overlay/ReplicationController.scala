@@ -26,7 +26,8 @@ package se.kth.id2203.overlay;
 import java.util.UUID
 
 import se.kth.id2203.BEB.Beb.{Build, Global, Replication}
-import se.kth.id2203.BEB.{BEB_Topology, BebPort}
+import se.kth.id2203.BEB._
+import se.kth.id2203.DSM.{AR_Range_Request, AR_Range_Response, AtomicRegisterPort}
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.kvstore.OpCode.OpCode
 import se.kth.id2203.kvstore.{Op, OpResponse}
@@ -51,19 +52,25 @@ import scala.util.Random;
 class ReplicationController extends ComponentDefinition {
 
   //******* Ports ******
-  val route = provides(Routing);
-  val timer = requires[Timer];
-  val pLink = requires[PerfectLinkPort]
-  val bebRepl = requires[BebPort]
+  val route: NegativePort[Routing.type] = provides(Routing);
+  val timer: PositivePort[Timer] = requires[Timer];
+  val pLink: PositivePort[PerfectLinkPort] = requires[PerfectLinkPort]
+  val beb: PositivePort[BebPort] = requires[BebPort]
+  val nnar: PositivePort[AtomicRegisterPort] = requires[AtomicRegisterPort];
   //******* Fields ******
-  val self = cfg.getValue[NetAddress]("id2203.project.address");
+  val self: NetAddress = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
   private var buildLut: Option[LookupTable] = None;
   var srcMap = scala.collection.mutable.Map.empty[UUID, NetAddress]
 
+  var replWriteUUIDs = Map.empty[UUID, Boolean]; // set of writes on their way for current replication
+  var replPartitionSuccess = 0; // if counter is not good enough switch with set of keys
+
+
 
   //******* Handlers ******
   pLink uponEvent {
+    // receives new node list
     case PL_Deliver(_, UpdateNodes(n: Set[NetAddress], event: NodeUpdate)) => handle{
       log.debug("Updated Nodes: " + n)
 
@@ -76,24 +83,23 @@ class ReplicationController extends ComponentDefinition {
         log.info("Fresh LookupTable..." + lut.getOrElse(Set.empty).toString);
 
       } else if (event == Update) {
-        // TODO add DSM reconfig here
-        assert(lut.isDefined, "Update was triggered before Boot was completed");
-
         // create new lut
         buildLut = Some(LookupTable.generate(n));
+
+        // reset counters in case old build-phase was not completed yet
+        replWriteUUIDs = Map.empty;
+        replPartitionSuccess = 0;
 
         trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink);
         trigger(PL_Send(self, BEB_Topology(buildLut.get.getNodes(self), Build)) -> pLink);
 
-        if (lut.get.isFirst(self)) {
-          // send all values from oldRepl to newRepl
-
-          // send globalBcast that all values were sent
-
+        // if node is first in partition, it will read its memory and send it to newRepl
+        if (lut.isDefined && lut.get.isFirst(self)) {
+          val (lowerBound, upperBound) = lut.get.getPartitionBoundaries(self);
+          trigger(AR_Range_Request(lowerBound, upperBound) -> nnar)
         }
       }
     }
-
 
     // forwards a message to responsible node for the key
     case PL_Deliver(src, RouteMsg(key,op:Op)) => handle {
@@ -102,8 +108,7 @@ class ReplicationController extends ComponentDefinition {
       // gets responsible node
       val nodes = lut.get.lookup(key);
       log.info(s"Choose from $nodes");
-      // throws assertionException when nodes is empty
-      assert(nodes.nonEmpty);
+      assert(nodes.nonEmpty, "nodes in partition are empty");
       val i = Random.nextInt(nodes.size);
       val target = nodes.drop(i).head;
       log.info(s"Forwarding message for key $key to $target with $op");
@@ -115,24 +120,73 @@ class ReplicationController extends ComponentDefinition {
       var src: Option[NetAddress] = None
       if(srcMap.contains(uuid)){
         src = srcMap.remove(uuid)
-        trigger(PL_Send(src.get, opResp) -> pLink)
-        log.info("Sent OpResponse")
+        if (src.get == self) {
+          // internal write that happen for reconfiguration
+          if (replWriteUUIDs.contains(uuid)) {
+            replWriteUUIDs += (uuid -> true);
+
+            // check if all writes were done
+            if (replWriteUUIDs.values.foldLeft(true) { case (a, b) => a && b }) {
+              replWriteUUIDs = Map.empty;
+
+              // send globalBcast that all values were written
+              val partitionCount = lut.get.partitions.size;
+              trigger(BEB_Broadcast(ReplicationWriteComplete(partitionCount), Beb.Global) -> beb);
+            }
+          }
+        } else {
+          // external writes that we will route back to client
+          trigger(PL_Send(src.get, opResp) -> pLink)
+          log.info("Sent OpResponse")
+        }
       }else{
         log.debug("No src for uuid known: either duplicate message or lost: " + opResp)
       }
-
-
     }
+
     // Connectionrequest: send ACK when the system is ready to requester
     case PL_Deliver(src, msg: Connect) => handle {
+      // do we already have a lookuptable?
       lut match {
-        // do we already have a lookuptable?
         case Some(l) => {
           log.debug("Accepting connection request from " + src);
           val size = l.getNodes.size;
           trigger (PL_Send(src, msg.ack(size)) -> pLink);
         }
         case None => log.info(s"Rejecting connection request from $src, as system is not ready, yet.");
+      }
+    }
+  }
+
+  nnar uponEvent {
+    case AR_Range_Response(values) => handle {
+      // write all values to newRepl
+      values.foreach(x => {
+        val (key, value) = x;
+
+        val op = Op("PUT",key, value);
+        srcMap += (op.id -> self);
+        replWriteUUIDs += (op.id -> false);
+        val nodes = buildLut.get.lookup(key);
+        assert(nodes.nonEmpty, "nodes in partition are empty");
+
+        //log.info(s"Choose from $nodes");
+        val i = Random.nextInt(nodes.size);
+        val target = nodes.drop(i).head;
+
+        //log.info(s"Forwarding message for key $key to $target with $op");
+        trigger(PL_Send(target, op) -> pLink);
+      })
+    }
+  }
+
+  beb uponEvent {
+    case BEB_Deliver(_, ReplicationWriteComplete(partitionCount: Int), Beb.Global) => handle {
+      replPartitionSuccess += 1;
+      if (replPartitionSuccess == partitionCount) {
+        replPartitionSuccess = 0;
+        lut = buildLut;
+        buildLut = None;
       }
     }
   }

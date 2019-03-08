@@ -35,7 +35,7 @@ class AtomicRegister() extends ComponentDefinition {
   nnar uponEvent {
     case AR_Read_Request(uuid, key, group) => handle {
       if (store.get(key).isEmpty) {
-        store(key) = new StoreObject;
+        store(key) = new StoreObject(key);
       }
       store(key).rid += 1;
       store(key).acks = 0;
@@ -49,7 +49,7 @@ class AtomicRegister() extends ComponentDefinition {
 
     case AR_Write_Request(wval, key, uuid, group) => handle {
       if (store.get(key).isEmpty) {
-        store(key) = new StoreObject;
+        store(key) = new StoreObject(key);
       }
 
       store(key).rid += 1;
@@ -61,13 +61,30 @@ class AtomicRegister() extends ComponentDefinition {
       // Broadcast write request to all
       trigger(BEB_Broadcast(READ(store(key).rid, key), group) -> beb);
     }
+
+    case AR_Range_Request(lowerBorder: String, upperBorder: String) => handle {
+      var filtered = mutable.Map.empty[String, StoreObject];
+
+      if (lowerBorder < upperBorder) {
+        filtered = store.filter(x => x._1 >= lowerBorder && x._1 < upperBorder);
+      } else {
+        filtered = store.filter(x => x._1 >= lowerBorder || x._1 < upperBorder);
+      }
+
+      val values = mutable.Map.empty[String, Any];
+      filtered.foreach(x => {
+        values(x._2.key) = x._2.value;
+      });
+
+      trigger(AR_Range_Response(values) -> nnar)
+    }
   }
 
   beb uponEvent {
     //Broadcasted READ -> respond with local value and ts
     case BEB_Deliver(src, READ(readID, key), group) => handle {
       if (store.get(key).isEmpty) {
-        store(key) = new StoreObject;
+        store(key) = new StoreObject(key);
       }
       trigger(PL_Send(src, VALUE(readID, key, store(key).ts, store(key).wr, store(key).value, group)) -> pLink);
     }

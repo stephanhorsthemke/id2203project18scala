@@ -4,4 +4,5 @@ import se.sics.kompics.sl._;
 
 object Routing extends Port {
   request[RouteMsg];
+  indication[ReplicationWriteComplete];
 }

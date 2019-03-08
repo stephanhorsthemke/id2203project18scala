@@ -86,6 +86,8 @@ class ParentComponent extends ComponentDefinition {
     connect[EPFDPort](fd -> nc)
     // ReplicationController
     connect[PerfectLinkPort](pLink -> rc);
+    connect[AtomicRegisterPort](ar -> rc);
+    connect[BebPort](beb -> rc);
     // KV
     connect(Routing)(rc -> kv);
     connect[PerfectLinkPort](pLink -> kv);
