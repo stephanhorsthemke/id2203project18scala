@@ -69,7 +69,8 @@ class ScenarioParent extends ComponentDefinition {
 
 class ScenarioClient extends ComponentDefinition {
 
-  case class Next(timeout: ScheduleTimeout) extends Timeout(timeout);
+  case class GET(timeout: ScheduleTimeout) extends Timeout(timeout);
+  case class CAS(timeout: ScheduleTimeout) extends Timeout(timeout);
 
   //******* Ports ******
   val timer = requires[Timer];
@@ -95,18 +96,36 @@ class ScenarioClient extends ComponentDefinition {
         SimulationResult += (s"PUT$i" -> "Sent");
       }
 
-      val scheduledTimeout = new ScheduleTimeout(10)
-      scheduledTimeout.setTimeoutEvent(Next(scheduledTimeout))
-      trigger(scheduledTimeout -> timer)
+      val CASTimeout = new ScheduleTimeout(10)
+      CASTimeout.setTimeoutEvent(CAS(CASTimeout))
+      trigger(CASTimeout -> timer)
+
+      val GETTimeout = new ScheduleTimeout(20)
+      GETTimeout.setTimeoutEvent(GET(GETTimeout))
+      trigger(GETTimeout -> timer)
     }
   }
 
 
   timer uponEvent {
-    case Next(_) => handle {
+
+    case CAS(_) => handle {
       val messages = SimulationResult[Int]("messages");
       for (i <- 0 to messages) {
-        val op = new Op(s"GET", s"test$i");
+        val op = new Op("CAS", s"test$i", i+4, i);
+        val routeMsg = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
+        trigger(PL_Send(server, routeMsg) -> pLink);
+        pending += (op.id -> s"CAS$i");
+        logger.debug("Server: " + server);
+        logger.info("Sending {}", op);
+        SimulationResult += (s"CAS$i" -> "Sent");
+      }
+    }
+
+    case GET(_) => handle {
+      val messages = SimulationResult[Int]("messages");
+      for (i <- 0 to messages) {
+        val op = new Op("GET", s"test$i");
         val routeMsg = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
         trigger(PL_Send(server, routeMsg) -> pLink);
         pending += (op.id -> s"GET$i");
@@ -119,11 +138,16 @@ class ScenarioClient extends ComponentDefinition {
   }
 
   pLink uponEvent {
-    case PL_Deliver(src, or @ OpResponse(id, status, value)) => handle {
+    case PL_Deliver(src, or @ OpResponse(id, status, value: Option[Any])) => handle {
       logger.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
-        case Some(x) => SimulationResult += (x -> status.toString());
-        case None      => logger.warn("ID $id was not pending! Ignoring response.");
+        case Some(x) =>
+            if (!value.nonEmpty){
+              SimulationResult += (x -> status.toString())
+            }else{
+              SimulationResult += (x -> value.get.toString);
+            }
+        case None =>  logger.warn("ID $id was not pending! Ignoring response.");
       }
     }
 

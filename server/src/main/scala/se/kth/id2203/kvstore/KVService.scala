@@ -21,7 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package se.kth.id2203.kvstore;
+package se.kth.id2203.kvstore
+
+;
 
 import java.util.UUID
 
@@ -45,30 +47,30 @@ class KVService extends ComponentDefinition {
 
   //******* Handlers ******
   pLink uponEvent {
-    case PL_Deliver(src, op :Op) if op.opName == "GET" => handle {
+    case PL_Deliver(src, op: Op) if op.opName == "GET" => handle {
       log.info("Got operation GET! from: " + src);
       srcMap += (op.id -> (src, op));
       trigger(AR_Read_Request(op.id, op.key) -> nnar);
     }
 
-    case PL_Deliver(src, op :Op) if op.opName == "PUT" => handle {
+    case PL_Deliver(src, op: Op) if op.opName == "PUT" => handle {
       log.info("Got operation PUT!");
       srcMap += (op.id -> (src, op));
       trigger(AR_Write_Request(op.value, op.key, op.id) -> nnar);
     }
 
-    case PL_Deliver(src, op :Op) if op.opName == "CAS" => handle {
+    case PL_Deliver(src, op: Op) if op.opName == "CAS" => handle {
       log.info("Got operation CAS!");
-      trigger(PL_Send(src, op.response(OpCode.NotImplemented)) -> pLink);
+      srcMap += (op.id -> (src, op));
+      trigger(AR_CAS_Request(op.refValue, op.value, op.key, op.id) -> nnar);
     }
   }
 
   nnar uponEvent {
 
     case AR_Read_Response(value: Option[Any], uuid: UUID) => handle {
-
       val srcOp = srcMap.remove(uuid);
-      if(srcOp.isDefined){
+      if (srcOp.isDefined) {
         val (src: NetAddress, op: Op) = srcOp.get
         if (value.nonEmpty) {
           log.info("Value found: " + value + " from: " + src)
@@ -77,22 +79,35 @@ class KVService extends ComponentDefinition {
           log.debug("Value not found: " + src)
           trigger(PL_Send(src, op.response(OpCode.NotFound)) -> pLink);
         }
-      }else{
+      } else {
         log.debug("No entry for uuid, either duplicate or wrong message: " + uuid)
       }
-
     }
 
     case AR_Write_Response(uuid: UUID) => handle {
       val srcOp = srcMap.remove(uuid);
-      if(srcOp.isDefined){
+      if (srcOp.isDefined) {
         val (src: NetAddress, op: Op) = srcOp.get
         log.info("Value written")
         trigger(PL_Send(src, op.response(OpCode.Ok)) -> pLink);
-      }else{
+      } else {
         log.debug("No entry for uuid, either duplicate or wrong message: " + uuid)
       }
     }
 
+    case AR_CAS_Response(value: Option[Any], uuid: UUID) => handle {
+      val srcOp = srcMap.remove(uuid);
+      if (srcOp.isDefined) {
+        val (src: NetAddress, op: Op) = srcOp.get
+        if (value.nonEmpty) {
+          log.info("Value after CAS: " + value)
+          trigger(PL_Send(src, op.response(OpCode.Ok, value)) -> pLink);
+        } else {
+          log.debug("This should not happen... CAS should always return value?")
+        }
+      } else {
+        log.debug("No entry for uuid, either duplicate or wrong message: " + uuid)
+      }
+    }
   }
 }

@@ -37,6 +37,7 @@ class AtomicRegister() extends ComponentDefinition {
       if (store.get(key).isEmpty) {
         store(key) = new StoreObject(key);
       }
+
       store(key).rid += 1;
       store(key).acks = 0;
       store(key).readlist = Map.empty;
@@ -62,7 +63,23 @@ class AtomicRegister() extends ComponentDefinition {
       trigger(BEB_Broadcast(READ(store(key).rid, key), group) -> beb);
     }
 
-    case AR_Range_Request(lowerBorder: String, upperBorder: String) => handle {
+    case AR_CAS_Request(cval, wval, key, uuid, group) => handle {
+      if (store.get(key).isEmpty) {
+        store(key) = new StoreObject(key);
+      }
+
+      store(key).rid += 1;
+      store(key).acks = 0;
+      store(key).readlist = Map.empty;
+      store(key).writeval = Some(wval);
+      store(key).compareval = Some(cval);
+      store(key).idMap += (store(key).rid -> uuid);
+
+      // Broadcast write request to all
+      trigger(BEB_Broadcast(READ(store(key).rid, key), Replication) -> beb);
+    }
+
+    case AR_Range_Request(lowerBorder, upperBorder) => handle {
       var filtered = mutable.Map.empty[String, StoreObject];
 
       if (lowerBorder < upperBorder) {
@@ -89,11 +106,16 @@ class AtomicRegister() extends ComponentDefinition {
       trigger(PL_Send(src, VALUE(readID, key, store(key).ts, store(key).wr, store(key).value, group)) -> pLink);
     }
 
-    case BEB_Deliver(src, w: WRITE, _) => handle {
+    case BEB_Deliver(src, w: WRITE, Replication) => handle {
+//      log.debug("Received WRITE w.ts=" + w.ts + "; w.wr=" + w.wr + "; store.ts=" + store(w.key).ts + "; store.wr=" + store(w.key).wr + s" (${w.key})");
+
       if ((w.ts, w.wr) > (store(w.key).ts, store(w.key).wr)) {
+//        log.debug(s"Doing WRITE (${w.key})");
         store(w.key).ts = w.ts;
         store(w.key).wr = w.wr;
         store(w.key).value = w.writeVal;
+      } else {
+//        log.debug(s"Not Doing WRITE (${w.key})");
       }
       trigger(PL_Send(src, ACK(w.rid, w.key)) -> pLink);
     }
@@ -104,24 +126,37 @@ class AtomicRegister() extends ComponentDefinition {
     case PL_Deliver(src, v: VALUE) => handle {
 
       if (v.rid == store(v.key).rid) {
-        store(v.key).readlist += (src -> (v.rid, v.ts, v.value));
+        store(v.key).readlist += (src -> (v.ts, v.wr, v.value));
 
         val n:Int = if (v.group == Replication) nRepl else nBuild
-        if (store(v.key).readlist.size > n / 2) {
-          val highest = store(v.key).readlist.valuesIterator.reduceLeft { (a, x) => if (a._2 > x._2) a else x };
+        if (store(v.key).readlist.size > n / 2.0) {
+//          log.debug("readlist: " + store(v.key).readlist);
+          val highest = store(v.key).readlist.valuesIterator.reduceLeft { (a, b) => if ((a._1, a._2) > (b._1, b._2)) a else b };
+//          log.debug("highest: " + highest);
           var maxts = highest._1;
           var rr = highest._2;
           store(v.key).readval = highest._3;
           store(v.key).readlist = Map.empty;
 
+//          val uuid = store(v.key).idMap(store(v.key).rid);
+//          if (store(v.key).compareval.isDefined) {
+//            log.debug("Comparing c=" + store(v.key).compareval + " with r=" + store(v.key).readval + s"($uuid)");
+//          }
+
           var bcastval: Option[Any] = None;
-          if (store(v.key).reading) {
+          if (store(v.key).reading // if read request
+            || (store(v.key).compareval.isDefined && !store(v.key).readval.get.equals(store(v.key).compareval.get))) { // if cas request and not equal
+
             bcastval = store(v.key).readval;
           } else {
             rr = rank;
             maxts = maxts + 1;
             bcastval = store(v.key).writeval;
           }
+
+//          if (store(v.key).compareval.isDefined) {
+//            log.debug("Sending WRITE rid=" + store(v.key).rid + "; maxts=" + maxts + "; rr=" + rr + "; bcastval=" + bcastval + s" ($uuid)");
+//          }
           trigger(BEB_Broadcast(WRITE(store(v.key).rid, v.key, maxts, rr, bcastval), v.group) -> beb);
 
         }
@@ -140,11 +175,15 @@ class AtomicRegister() extends ComponentDefinition {
         store(v.key).acks += 1;
 
         val n:Int = if (v.group == Replication) nRepl else nBuild
-        if (store(v.key).acks > n / 2) {
+        if (store(v.key).acks > n / 2.0) {
           store(v.key).acks = 0;
           if (store(v.key).reading) {
             store(v.key).reading = false;
             trigger(AR_Read_Response(store(v.key).readval, uuid) -> nnar);
+          } else if (store(v.key).compareval.isDefined) {
+            store(v.key).compareval = None;
+//            log.debug("CAS ready for response - value=" + store(v.key).value + " readval=" + store(v.key).readval + " writeval=" + store(v.key).writeval + " compareval=" + store(v.key).compareval + s"($uuid)");
+            trigger(AR_CAS_Response(store(v.key).readval, uuid) -> nnar);
           } else {
             trigger(AR_Write_Response(uuid) -> nnar)
           }

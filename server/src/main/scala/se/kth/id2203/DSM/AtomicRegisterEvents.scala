@@ -5,10 +5,12 @@ import java.util.UUID
 import se.kth.id2203.BEB.Beb.{BebType, Replication}
 import se.sics.kompics.KompicsEvent;
 
-case class AR_Read_Request(id: UUID, key: String, group : BebType = Replication) extends KompicsEvent
+case class AR_Read_Request(id: UUID, key: String, group: BebType = Replication) extends KompicsEvent
 case class AR_Read_Response(value: Option[Any], id: UUID) extends KompicsEvent
 case class AR_Write_Request(value: Any, key: String, id: UUID, group: BebType = Replication) extends KompicsEvent
 case class AR_Write_Response(id: UUID) extends KompicsEvent
+case class AR_CAS_Request(refValue: Any, value: Any, key: String, id: UUID, group: BebType = Replication) extends KompicsEvent
+case class AR_CAS_Response(value: Option[Any], id: UUID) extends KompicsEvent
 case class AR_Range_Request(lowerBorder: String, upperBorder: String) extends KompicsEvent
 case class AR_Range_Response(values: collection.Map[String, Any]) extends KompicsEvent
 
