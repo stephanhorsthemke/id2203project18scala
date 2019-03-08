@@ -157,7 +157,7 @@ class AtomicRegister() extends ComponentDefinition {
           } else if (store(v.key).compareval.isDefined) {
             store(v.key).compareval = None;
 //            log.debug("CAS ready for response - value=" + store(v.key).value + " readval=" + store(v.key).readval + " writeval=" + store(v.key).writeval + " compareval=" + store(v.key).compareval + s"($uuid)");
-            trigger(AR_CAS_Response(store(v.key).value, uuid) -> nnar);
+            trigger(AR_CAS_Response(store(v.key).readval, uuid) -> nnar);
           } else {
             trigger(AR_Write_Response(uuid) -> nnar)
           }
