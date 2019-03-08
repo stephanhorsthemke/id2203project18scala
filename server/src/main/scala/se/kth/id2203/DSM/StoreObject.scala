@@ -4,7 +4,7 @@ import java.util.UUID
 
 import se.kth.id2203.networking.NetAddress
 
-class StoreObject {
+class StoreObject(var key: String) {
   var (ts, wr) = (0, 0);
   var value: Option[Any] = None;
   var acks = 0;

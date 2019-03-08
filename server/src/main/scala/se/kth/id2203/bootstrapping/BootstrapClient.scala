@@ -51,6 +51,7 @@ class BootstrapClient extends ComponentDefinition {
     case _: Start => handle {
       log.debug("Starting bootstrap client on {}", self);
       trigger(PL_Send(server, CheckIn) -> pLink);
+      suicide()
     }
   }
 }

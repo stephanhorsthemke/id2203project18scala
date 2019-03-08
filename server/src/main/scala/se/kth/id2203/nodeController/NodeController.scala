@@ -33,7 +33,11 @@ import scala.collection.mutable
   *   - adjust replicas
   */
 
-// TODO: generate the Lookuptable anew in the OverlayManager -> Is the generation deterministic with a specific set of nodes?
+object NodeUpdate {
+  sealed trait NodeUpdate;
+  case object Boot extends NodeUpdate;
+  case object Update extends NodeUpdate;
+}
 class NodeController extends ComponentDefinition{
 
   val pLink = requires[PerfectLinkPort]
@@ -76,7 +80,7 @@ class NodeController extends ComponentDefinition{
       booted = true;
       nodes = n;
       newNodes = n;
-      trigger(PL_Send(self, UpdateNodes(nodes.toSet)) -> pLink)
+      trigger(PL_Send(self, UpdateNodes(nodes.toSet, NodeUpdate.Boot)) -> pLink)
     }
 
     case PL_Deliver(src, CheckIn) if booted =>  handle {
@@ -91,7 +95,7 @@ class NodeController extends ComponentDefinition{
       nodes = n.get
       newNodes = n.get
       log.info("Send decision to overlay manager: " + n)
-      trigger(PL_Send(self, UpdateNodes(nodes.toSet)) -> pLink)
+      trigger(PL_Send(self, UpdateNodes(nodes.toSet, NodeUpdate.Update)) -> pLink)
     }
   }
 
