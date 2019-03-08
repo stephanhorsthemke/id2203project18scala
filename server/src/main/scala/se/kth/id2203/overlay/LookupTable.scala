@@ -81,7 +81,7 @@ class LookupTable extends NodeAssignment with Serializable {
   override def toString: String = {
     val sb = new StringBuilder();
     sb.append("LookupTable(\n");
-    sb.append(partitions.mkString(","));
+    sb.append(partitions.mkString(",\n"));
     sb.append(")");
     sb.toString();
   }

@@ -80,11 +80,12 @@ class ReplicationController extends ComponentDefinition {
         trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink);
         trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink);
 
-        log.info("Fresh LookupTable..." + lut.getOrElse(Set.empty).toString);
+        log.info("Boot LookupTable..." + lut.getOrElse(Set.empty).toString);
 
       } else if (event == Update) {
         // create new lut
         buildLut = Some(LookupTable.generate(n));
+        log.info("Build LookupTable..." + buildLut.getOrElse(Set.empty).toString);
 
         // reset counters in case old build-phase was not completed yet
         replWriteUUIDs = Map.empty;
@@ -95,6 +96,7 @@ class ReplicationController extends ComponentDefinition {
 
         // if node is first in partition, it will read its memory and send it to newRepl
         if (lut.isDefined && lut.get.isFirst(self)) {
+          log.debug("I am first node in old partition. Asking for Range of keys.");
           val (lowerBound, upperBound) = lut.get.getPartitionBoundaries(self);
           trigger(AR_Range_Request(lowerBound, upperBound) -> nnar)
         }
@@ -160,23 +162,30 @@ class ReplicationController extends ComponentDefinition {
 
   nnar uponEvent {
     case AR_Range_Response(values) => handle {
+      log.debug("Received store values" + values);
+
       // write all values to newRepl
-      values.foreach(x => {
-        val (key, value) = x;
+      if (values.nonEmpty) {
+        values.foreach(x => {
+          val (key, value) = x;
 
-        val op = Op("PUT",key, value);
-        srcMap += (op.id -> self);
-        replWriteUUIDs += (op.id -> false);
-        val nodes = buildLut.get.lookup(key);
-        assert(nodes.nonEmpty, "nodes in partition are empty");
+          val op = Op("PUT", key, value);
+          srcMap += (op.id -> self);
+          replWriteUUIDs += (op.id -> false);
+          val nodes = buildLut.get.lookup(key);
+          assert(nodes.nonEmpty, "nodes in partition are empty");
 
-        //log.info(s"Choose from $nodes");
-        val i = Random.nextInt(nodes.size);
-        val target = nodes.drop(i).head;
+          //log.info(s"Choose from $nodes");
+          val i = Random.nextInt(nodes.size);
+          val target = nodes.drop(i).head;
 
-        //log.info(s"Forwarding message for key $key to $target with $op");
-        trigger(PL_Send(target, op) -> pLink);
-      })
+          //log.info(s"Forwarding message for key $key to $target with $op");
+          trigger(PL_Send(target, op) -> pLink);
+        })
+      } else {
+        val partitionCount = lut.get.partitions.size;
+        trigger(BEB_Broadcast(ReplicationWriteComplete(partitionCount), Beb.Global) -> beb);
+      }
     }
   }
 
@@ -184,6 +193,7 @@ class ReplicationController extends ComponentDefinition {
     case BEB_Deliver(_, ReplicationWriteComplete(partitionCount: Int), Beb.Global) => handle {
       replPartitionSuccess += 1;
       if (replPartitionSuccess == partitionCount) {
+        log.debug("Switch LUTs\nold: " + lut.getOrElse(Set.empty).toString + "\nnew: " + buildLut.getOrElse(Set.empty).toString);
         replPartitionSuccess = 0;
         lut = buildLut;
         buildLut = None;
