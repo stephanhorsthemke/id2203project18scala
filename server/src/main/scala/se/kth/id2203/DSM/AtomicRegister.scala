@@ -76,7 +76,7 @@ class AtomicRegister() extends ComponentDefinition {
       store(key).idMap += (store(key).rid -> uuid);
 
       // Broadcast write request to all
-      trigger(BEB_Broadcast(READ(store(key).rid, key), Replication) -> beb);
+      trigger(BEB_Broadcast(READ(store(key).rid, key), group) -> beb);
     }
 
     case AR_Range_Request(lowerBorder, upperBorder) => handle {
@@ -106,7 +106,7 @@ class AtomicRegister() extends ComponentDefinition {
       trigger(PL_Send(src, VALUE(readID, key, store(key).ts, store(key).wr, store(key).value, group)) -> pLink);
     }
 
-    case BEB_Deliver(src, w: WRITE, Replication) => handle {
+    case BEB_Deliver(src, w: WRITE, _) => handle {
 //      log.debug("Received WRITE w.ts=" + w.ts + "; w.wr=" + w.wr + "; store.ts=" + store(w.key).ts + "; store.wr=" + store(w.key).wr + s" (${w.key})");
 
       if ((w.ts, w.wr) > (store(w.key).ts, store(w.key).wr)) {

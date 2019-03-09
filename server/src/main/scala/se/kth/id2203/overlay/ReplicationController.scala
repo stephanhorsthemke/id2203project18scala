@@ -79,6 +79,7 @@ class ReplicationController extends ComponentDefinition {
 
         trigger(PL_Send(self, BEB_Topology(n, Global)) -> pLink);
         trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink);
+        trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Build)) -> pLink);
 
         log.info("Boot LookupTable..." + lut.getOrElse(Set.empty).toString);
 
@@ -166,6 +167,7 @@ class ReplicationController extends ComponentDefinition {
 
       // write all values to newRepl
       if (values.nonEmpty) {
+        Thread.sleep(200);
         values.foreach(x => {
           val (key, value) = x;
 
@@ -180,7 +182,7 @@ class ReplicationController extends ComponentDefinition {
           val target = nodes.drop(i).head;
 
           //log.info(s"Forwarding message for key $key to $target with $op");
-          trigger(PL_Send(target, op) -> pLink);
+          trigger(PL_Send(target, ReplicationWrite(op)) -> pLink);
         })
       } else {
         val partitionCount = lut.get.partitions.size;
@@ -193,10 +195,15 @@ class ReplicationController extends ComponentDefinition {
     case BEB_Deliver(_, ReplicationWriteComplete(partitionCount: Int), Beb.Global) => handle {
       replPartitionSuccess += 1;
       if (replPartitionSuccess == partitionCount) {
-        log.debug("Switch LUTs\nold: " + lut.getOrElse(Set.empty).toString + "\nnew: " + buildLut.getOrElse(Set.empty).toString);
         replPartitionSuccess = 0;
-        lut = buildLut;
-        buildLut = None;
+        if (buildLut.isDefined) {
+          log.debug("Switch LUTs\nold: " + lut.getOrElse(Set.empty).toString + "\nnew: " + buildLut.getOrElse(Set.empty).toString);
+          lut = buildLut;
+          buildLut = None;
+
+          log.debug("Set new Replication Broadcast Group")
+          trigger(PL_Send(self, BEB_Topology(lut.get.getNodes(self), Replication)) -> pLink);
+        }
       }
     }
   }

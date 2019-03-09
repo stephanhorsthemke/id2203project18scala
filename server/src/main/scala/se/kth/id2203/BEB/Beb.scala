@@ -29,7 +29,7 @@ class Beb() extends ComponentDefinition {
   //handlers
   beb uponEvent {
     case x @ BEB_Broadcast(_, typ) => handle {
-      val topology = if (typ == Replication) topologyRepl else topologyGlobal;
+      val topology = if (typ == Replication) topologyRepl else if (typ == Build) topologyBuild else topologyGlobal;
 
       log.debug("Broadcasting to " + typ + " " + topology)
 

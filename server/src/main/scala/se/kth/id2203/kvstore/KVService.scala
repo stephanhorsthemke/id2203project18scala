@@ -27,12 +27,12 @@ package se.kth.id2203.kvstore
 
 import java.util.UUID
 
+import se.kth.id2203.BEB.Beb.Build
 import se.kth.id2203.DSM._
 import se.kth.id2203.PerfectLink.{PL_Deliver, PL_Send, PerfectLinkPort}
 import se.kth.id2203.networking._
-import se.kth.id2203.overlay.Routing
-import se.sics.kompics.sl._
-import se.sics.kompics.network.Network;
+import se.kth.id2203.overlay.{ReplicationWrite, Routing}
+import se.sics.kompics.sl._;
 
 class KVService extends ComponentDefinition {
 
@@ -57,6 +57,12 @@ class KVService extends ComponentDefinition {
       log.info("Got operation PUT!");
       srcMap += (op.id -> (src, op));
       trigger(AR_Write_Request(op.value, op.key, op.id) -> nnar);
+    }
+
+    case PL_Deliver(src, ReplicationWrite(op: Op)) => handle {
+      log.info("Got operation ReplicationWrite!");
+      srcMap += (op.id -> (src, op));
+      trigger(AR_Write_Request(op.value, op.key, op.id, Build) -> nnar);
     }
 
     case PL_Deliver(src, op: Op) if op.opName == "CAS" => handle {
