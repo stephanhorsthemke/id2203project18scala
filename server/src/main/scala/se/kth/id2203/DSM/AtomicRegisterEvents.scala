@@ -12,7 +12,7 @@ case class AR_Write_Response(id: UUID) extends KompicsEvent
 case class AR_CAS_Request(refValue: Any, value: Any, key: String, id: UUID, group: BebType = Replication) extends KompicsEvent
 case class AR_CAS_Response(value: Option[Any], id: UUID) extends KompicsEvent
 case class AR_Range_Request(lowerBorder: String, upperBorder: String) extends KompicsEvent
-case class AR_Range_Response(values: collection.Map[String, Any]) extends KompicsEvent
+case class AR_Range_Response(values: collection.Map[String, Option[Any]]) extends KompicsEvent
 
 //The following events are to be used internally by the Atomic Register
 case class ACK(rid: Int, key: String, group : BebType = Replication) extends KompicsEvent;

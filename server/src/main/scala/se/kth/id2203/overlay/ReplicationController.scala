@@ -169,7 +169,7 @@ class ReplicationController extends ComponentDefinition {
         values.foreach(x => {
           val (key, value) = x;
 
-          val op = Op("PUT", key, value);
+          val op = Op("PUT", key, value.get);
           srcMap += (op.id -> self);
           replWriteUUIDs += (op.id -> false);
           val nodes = buildLut.get.lookup(key);

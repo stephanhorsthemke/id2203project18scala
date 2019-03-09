@@ -88,7 +88,7 @@ class AtomicRegister() extends ComponentDefinition {
         filtered = store.filter(x => x._1 >= lowerBorder || x._1 < upperBorder);
       }
 
-      val values = mutable.Map.empty[String, Any];
+      val values = mutable.Map.empty[String, Option[Any]];
       filtered.foreach(x => {
         values(x._2.key) = x._2.value;
       });
